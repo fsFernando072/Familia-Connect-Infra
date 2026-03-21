@@ -130,6 +130,83 @@ aws ec2 associate-route-table \
     --output table \
     --region $REGION
 
+# Criação ACLs
+echo -e "\nCriando ACL Pública"
+ACL_PUBLIC_ID=$(aws ec2 create-network-acl \
+    --vpc-id $VPC_ID \
+    --tag-specifications "ResourceType=network-acl,Tags=[{Key=Name,Value=acl-publica}]" \
+    --query 'NetworkAcl.NetworkAclId' \
+    --output text --region $REGION)
+
+ASSOC_ID=$(aws ec2 describe-network-acls \
+    --filters "Name=association.subnet-id,Values=$SUBNET_PUBLIC_ID" \
+    --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
+    --output text --region $REGION)
+
+aws ec2 replace-network-acl-association \
+    --association-id $ASSOC_ID \
+    --network-acl-id $ACL_PUBLIC_ID \
+    --region $REGION \
+    >/dev/null
+
+# Mostrar ACL pública criada
+aws ec2 describe-network-acls \
+    --network-acl-ids $ACL_PUBLIC_ID \
+    --query "NetworkAcls[].{ACL_ID:NetworkAclId,VPC:VpcId,Associations:Associations[].SubnetId}" \
+    --output table --region $REGION
+
+# Regras de entrada ACL pública
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
+    --rule-number 100 --protocol tcp --port-range From=22,To=22 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
+    --rule-number 200 --protocol tcp --port-range From=80,To=80 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
+    --rule-number 300 --protocol tcp --port-range From=3333,To=3333 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
+    --rule-number 400 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+
+# Regras de saída ACL pública
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --egress \
+    --rule-number 100 --protocol -1 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+
+echo -e "\nCriando ACL Privada"
+ACL_PRIVATE_ID=$(aws ec2 create-network-acl \
+    --vpc-id $VPC_ID \
+    --tag-specifications "ResourceType=network-acl,Tags=[{Key=Name,Value=acl-privada}]" \
+    --query 'NetworkAcl.NetworkAclId' \
+    --output text --region $REGION)
+
+ASSOC_ID_PRIVATE=$(aws ec2 describe-network-acls \
+    --filters "Name=association.subnet-id,Values=$SUBNET_PRIVATE_ID" \
+    --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
+    --output text --region $REGION)
+
+aws ec2 replace-network-acl-association \
+    --association-id $ASSOC_ID_PRIVATE \
+    --network-acl-id $ACL_PRIVATE_ID \
+    --region $REGION \
+    >/dev/null
+
+# Mostrar ACL privada criada
+aws ec2 describe-network-acls \
+    --network-acl-ids $ACL_PRIVATE_ID \
+    --query "NetworkAcls[].{ACL_ID:NetworkAclId,VPC:VpcId,Associations:Associations[].SubnetId}" \
+    --output table --region $REGION
+
+# Regras de entrada ACL privada
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
+    --rule-number 100 --protocol tcp --port-range From=22,To=22 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
+    --rule-number 200 --protocol tcp --port-range From=3306,To=3306 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
+    --rule-number 300 --protocol tcp --port-range From=8080,To=8080 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
+    --rule-number 400 --protocol tcp --port-range From=32000,To=65535 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+
+# Regras de saída ACL privada
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --egress \
+    --rule-number 100 --protocol -1 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+
 # Security Groups
 echo -e "\nCriando Security Groups..."
 SG_FRONT_ID=$(aws ec2 create-security-group --group-name front-sg --description "Front-end SG" --vpc-id $VPC_ID \

@@ -9,12 +9,17 @@ VPC_ID=$(aws ec2 describe-vpcs \
     --query 'Vpcs[0].VpcId' \
     --output text --region $REGION)
 
+if [ "$VPC_ID" == "None" ]; then
+    echo "Nenhuma VPC encontrada com o nome $VPC_NAME na região $REGION."
+    exit 1
+fi
+
 aws ec2 describe-vpcs \
     --vpc-ids $VPC_ID \
     --query "Vpcs[].{VpcId:VpcId,CIDR:CidrBlock}" \
     --output table --region $REGION
 
-echo "Excluindo instâncias"
+echo "Excluindo instâncias..."
 INSTANCE_IDS=$(aws ec2 describe-instances \
     --filters "Name=vpc-id,Values=$VPC_ID" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
     --query "Reservations[].Instances[].InstanceId" \
@@ -38,11 +43,11 @@ else
     echo "Nenhuma instância encontrada na VPC."
 fi
 
-echo -e "\nExcluindo par de chaves"
-aws ec2 delete-key-pair --key-name $KEY_NAME --region $REGION 2>/dev/null || true
+echo -e "\nExcluindo par de chaves..."
+aws ec2 delete-key-pair --key-name $KEY_NAME --region $REGION >/dev/null
 rm -f $KEY_NAME.pem
 
-echo -e "\nExcluindo NAT Gateway"
+echo -e "\nExcluindo NAT Gateway..."
 NATGW_ID=$(aws ec2 describe-nat-gateways \
     --filter "Name=tag:Name,Values=${VPC_NAME}-natgw" \
     --query "NatGateways[?State=='available'].NatGatewayId | [0]" \
@@ -53,11 +58,14 @@ if [ "$NATGW_ID" != "None" ]; then
       --nat-gateway-ids $NATGW_ID \
       --query "NatGateways[].{NatGatewayId:NatGatewayId,State:State}" \
       --output table --region $REGION
-  aws ec2 delete-nat-gateway --nat-gateway-id $NATGW_ID --region $REGION
+  aws ec2 delete-nat-gateway --nat-gateway-id $NATGW_ID --region $REGION >/dev/null
+
+  echo "Aguardando exclusão do NAT Gateway..."
   aws ec2 wait nat-gateway-deleted --nat-gateway-ids $NATGW_ID --region $REGION
+  echo "NAT Gateway excluído com sucesso."
 fi
 
-echo -e "\nLiberando Elastic IPs"
+echo -e "\nLiberando Elastic IPs..."
 EIP_ALLOC_IDS=$(aws ec2 describe-addresses \
     --filters "Name=domain,Values=vpc" \
     --query "Addresses[].AllocationId" \
@@ -73,7 +81,7 @@ for eip in $EIP_ALLOC_IDS; do
   aws ec2 release-address --allocation-id $eip --region $REGION || echo "Não foi possível liberar $eip (já liberado ou sem permissão)."
 done
 
-echo -e "\nExcluindo Internet Gateway"
+echo -e "\nExcluindo Internet Gateway..."
 IGW_ID=$(aws ec2 describe-internet-gateways \
     --filters "Name=tag:Name,Values=${VPC_NAME}-igw" \
     --query "InternetGateways[0].InternetGatewayId" \
@@ -88,7 +96,7 @@ if [ "$IGW_ID" != "None" ]; then
   aws ec2 delete-internet-gateway --internet-gateway-id $IGW_ID --region $REGION || true
 fi
 
-echo -e "\nExcluindo Subnets"
+echo -e "\nExcluindo Subnets..."
 SUBNET_IDS=$(aws ec2 describe-subnets \
     --filters "Name=vpc-id,Values=$VPC_ID" \
     --query "Subnets[].SubnetId" \
@@ -103,7 +111,7 @@ for subnet in $SUBNET_IDS; do
     aws ec2 delete-subnet --subnet-id $subnet --region $REGION || true
 done
 
-echo -e "\nExcluindo Route Tables"
+echo -e "\nExcluindo Route Tables..."
 RTB_IDS=$(aws ec2 describe-route-tables \
     --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private" \
     --query "RouteTables[].RouteTableId" \
@@ -124,22 +132,58 @@ for rtb in $RTB_IDS; do
   aws ec2 delete-route-table --route-table-id $rtb --region $REGION || true
 done
 
-echo -e "\nExcluindo Security Groups"
-SG_IDS=$(aws ec2 describe-security-groups \
-    --filters "Name=vpc-id,Values=$VPC_ID" \
-    --query "SecurityGroups[?GroupName!='default'].GroupId" \
-    --output text --region $REGION)
-
+echo -e "\nExcluindo Security Groups..."
 aws ec2 describe-security-groups \
-    --filters "Name=vpc-id,Values=$VPC_ID" \
-    --query "SecurityGroups[?GroupName!='default'].{GroupId:GroupId,Name:GroupName}" \
+    --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=front-sg,back-sg,db-sg" \
+    --query "SecurityGroups[].{GroupId:GroupId,Name:GroupName}" \
     --output table --region $REGION
 
-for sg in $SG_IDS; do
-  aws ec2 delete-security-group --group-id $sg --region $REGION || true
+DB_SG_ID=$(aws ec2 describe-security-groups \
+    --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=db-sg" \
+    --query "SecurityGroups[0].GroupId" \
+    --output text --region $REGION)
+
+BACK_SG_ID=$(aws ec2 describe-security-groups \
+    --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=back-sg" \
+    --query "SecurityGroups[0].GroupId" \
+    --output text --region $REGION)
+
+FRONT_SG_ID=$(aws ec2 describe-security-groups \
+    --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=front-sg" \
+    --query "SecurityGroups[0].GroupId" \
+    --output text --region $REGION)
+
+# Excluir cada um na ordem
+if [ "$DB_SG_ID" != "None" ]; then
+  aws ec2 delete-security-group --group-id $DB_SG_ID --region $REGION >/dev/null
+fi
+
+if [ "$BACK_SG_ID" != "None" ]; then
+  aws ec2 delete-security-group --group-id $BACK_SG_ID --region $REGION >/dev/null
+fi
+
+if [ "$FRONT_SG_ID" != "None" ]; then
+  aws ec2 delete-security-group --group-id $FRONT_SG_ID --region $REGION >/dev/null
+fi
+
+echo -e "\nExcluindo Network ACLs..."
+
+ACL_IDS=$(aws ec2 describe-network-acls \
+    --filters "Name=vpc-id,Values=$VPC_ID" \
+    --query "NetworkAcls[?IsDefault==\`false\`].NetworkAclId" \
+    --output text --region $REGION)
+
+aws ec2 describe-network-acls \
+    --filters "Name=vpc-id,Values=$VPC_ID" \
+    --query "NetworkAcls[?IsDefault==\`false\`].{ACL_ID:NetworkAclId,Name:Tags[?Key=='Name']|[0].Value}" \
+    --output table --region $REGION
+
+for acl in $ACL_IDS; do
+  aws ec2 delete-network-acl --network-acl-id $acl --region $REGION || true
 done
 
-echo -e "\nExcluindo VPC"
+
+echo -e "\nExcluindo VPC..."
 aws ec2 delete-vpc --vpc-id $VPC_ID --region $REGION || true
 
 echo -e "\nInfraestrutura da VPC $VPC_NAME excluída com sucesso!"
