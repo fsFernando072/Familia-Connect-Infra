@@ -13,9 +13,10 @@ KEY_NAME="myssh"
 # Criar par de chaves
 echo "Criando par de chaves $KEY_NAME..."
 aws ec2 create-key-pair \
-    --key-name $KEY_NAME \
-    --query '{KeyMaterial:KeyMaterial}' \
-    --output table --region $REGION > $KEY_NAME.pem
+    --key-name minhachave \
+    --region us-east-1 \
+    --query 'KeyMaterial' \
+    --output text > minhachave.pem
 chmod 400 $KEY_NAME.pem
 echo "Par de chaves criada e salva em $KEY_NAME.pem"
 
@@ -161,9 +162,11 @@ aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
     --rule-number 200 --protocol tcp --port-range From=80,To=80 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
-    --rule-number 300 --protocol tcp --port-range From=3333,To=3333 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+    --rule-number 300 --protocol tcp --port-range From=8080,To=8080 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
-    --rule-number 400 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+    --rule-number 400 --protocol tcp --port-range From=3333,To=3333 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
+    --rule-number 500 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
 # Regras de saída ACL pública
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --egress \
@@ -219,6 +222,7 @@ aws ec2 describe-security-groups \
 
 aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 80 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
+aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 8080 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 3333 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 
 SG_BACK_ID=$(aws ec2 create-security-group --group-name back-sg --description "Back-end SG" --vpc-id $VPC_ID \
