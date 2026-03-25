@@ -13,10 +13,10 @@ KEY_NAME="myssh"
 # Criar par de chaves
 echo "Criando par de chaves $KEY_NAME..."
 aws ec2 create-key-pair \
-    --key-name minhachave \
+    --key-name $KEY_NAME \
     --region us-east-1 \
     --query 'KeyMaterial' \
-    --output text > minhachave.pem
+    --output text > $KEY_NAME.pem
 chmod 400 $KEY_NAME.pem
 echo "Par de chaves criada e salva em $KEY_NAME.pem"
 
