@@ -164,9 +164,11 @@ aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
     --rule-number 300 --protocol tcp --port-range From=8080,To=8080 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
-    --rule-number 400 --protocol tcp --port-range From=3333,To=3333 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+    --rule-number 400 --protocol tcp --port-range From=443,To=443 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
-    --rule-number 500 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+    --rule-number 500 --protocol tcp --port-range From=3333,To=3333 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
+    --rule-number 600 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
 # Regras de saída ACL pública
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --egress \
@@ -202,9 +204,11 @@ aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
     --rule-number 200 --protocol tcp --port-range From=3306,To=3306 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
-    --rule-number 300 --protocol tcp --port-range From=8080,To=8080 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+    --rule-number 300 --protocol tcp --port-range From=443,To=443 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
-    --rule-number 400 --protocol tcp --port-range From=32000,To=65535 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+    --rule-number 400 --protocol tcp --port-range From=8080,To=8080 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
+    --rule-number 500 --protocol tcp --port-range From=32000,To=65535 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
 
 # Regras de saída ACL privada
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --egress \
@@ -222,6 +226,7 @@ aws ec2 describe-security-groups \
 
 aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 80 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
+aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 443 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 8080 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 aws ec2 authorize-security-group-ingress --group-id $SG_FRONT_ID --protocol tcp --port 3333 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 
@@ -234,6 +239,7 @@ aws ec2 describe-security-groups \
     --output table --region $REGION
 
 aws ec2 authorize-security-group-ingress --group-id $SG_BACK_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
+aws ec2 authorize-security-group-ingress --group-id $SG_BACK_ID --protocol tcp --port 443 --cidr 0.0.0.0/0 --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 aws ec2 authorize-security-group-ingress --group-id $SG_BACK_ID --protocol tcp --port 8080 --source-group $SG_FRONT_ID --query '{RuleCreated:Return,Port:SecurityGroupRules[0].FromPort}' --output table --region $REGION
 
 SG_DB_ID=$(aws ec2 create-security-group --group-name db-sg --description "Database SG" --vpc-id $VPC_ID \
