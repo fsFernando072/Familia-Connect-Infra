@@ -1,6 +1,6 @@
 #!/bin/bash
 REGION="us-east-1"
-VPC_NAME="minha-vpc-01"
+VPC_NAME="vpc-familia-connect"
 KEY_NAME="myssh"
 
 # Obter VPC
@@ -113,12 +113,12 @@ done
 
 echo -e "\nExcluindo Route Tables..."
 RTB_IDS=$(aws ec2 describe-route-tables \
-    --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private" \
+    --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private-1,${VPC_NAME}-rtb-private-2" \
     --query "RouteTables[].RouteTableId" \
     --output text --region $REGION)
 
 aws ec2 describe-route-tables \
-    --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private" \
+    --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private-1,${VPC_NAME}-rtb-private-2" \
     --query "RouteTables[].{Name:Tags[?Key=='Name']|[0].Value,RouteTableId:RouteTableId}" \
     --output table --region $REGION
 

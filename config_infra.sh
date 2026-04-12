@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # Variáveis
-VPC_NAME="minha-vpc-01"
-CIDR_BLOCK="10.0.0.0/24"
-SUBNET_PUBLIC_CIDR="10.0.0.0/25"
-SUBNET_PRIVATE_CIDR="10.0.0.128/25"
+VPC_NAME="vpc-familia-connect"
+CIDR_BLOCK="10.0.0.0/22"
+SUBNET_PUBLIC_CIDR="10.0.1.0/24"
+SUBNET_PRIVATE1_CIDR="10.0.2.0/24"
+SUBNET_PRIVATE2_CIDR="10.0.3.0/24"
 REGION="us-east-1"
 AMI_ID="ami-0c7217cdde317cfec"   # Ubuntu Server 22.04 LTS (x86)
-INSTANCE_TYPE="t2.micro"
+INSTANCE_TYPE="t3.micro"
 KEY_NAME="myssh"
 
 # Criar par de chaves
@@ -43,13 +44,23 @@ aws ec2 describe-subnets \
     --query "Subnets[].{SubnetId:SubnetId,CIDR:CidrBlock,AZ:AvailabilityZone}" \
     --output table --region $REGION
 
-SUBNET_PRIVATE_ID=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block $SUBNET_PRIVATE_CIDR \
+SUBNET_PRIVATE1_ID=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block $SUBNET_PRIVATE1_CIDR \
     --availability-zone ${REGION}a \
-    --tag-specifications "ResourceType=subnet,Tags=[{Key=Name,Value=sub-rede-privada}]" \
+    --tag-specifications "ResourceType=subnet,Tags=[{Key=Name,Value=sub-rede-privada-1}]" \
     --query 'Subnet.SubnetId' --output text --region $REGION)
 
 aws ec2 describe-subnets \
-    --subnet-ids $SUBNET_PRIVATE_ID \
+    --subnet-ids $SUBNET_PRIVATE1_ID \
+    --query "Subnets[].{SubnetId:SubnetId,CIDR:CidrBlock,AZ:AvailabilityZone}" \
+    --output table --region $REGION
+
+SUBNET_PRIVATE2_ID=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block $SUBNET_PRIVATE2_CIDR \
+    --availability-zone ${REGION}a \
+    --tag-specifications "ResourceType=subnet,Tags=[{Key=Name,Value=sub-rede-privada-2}]" \
+    --query 'Subnet.SubnetId' --output text --region $REGION)
+
+aws ec2 describe-subnets \
+    --subnet-ids $SUBNET_PRIVATE2_ID \
     --query "Subnets[].{SubnetId:SubnetId,CIDR:CidrBlock,AZ:AvailabilityZone}" \
     --output table --region $REGION
 
@@ -106,18 +117,18 @@ aws ec2 describe-nat-gateways \
     --query "NatGateways[].{NatGatewayId:NatGatewayId,State:State}" \
     --output table --region $REGION
 
-echo -e "\nCriando Route Table privada..."
-RTB_PRIVATE_ID=$(aws ec2 create-route-table --vpc-id $VPC_ID \
-    --tag-specifications "ResourceType=route-table,Tags=[{Key=Name,Value=${VPC_NAME}-rtb-private}]" \
+echo -e "\nCriando Route Table privada 1..."
+RTB_PRIVATE1_ID=$(aws ec2 create-route-table --vpc-id $VPC_ID \
+    --tag-specifications "ResourceType=route-table,Tags=[{Key=Name,Value=${VPC_NAME}-rtb-private-1}]" \
     --query 'RouteTable.RouteTableId' --output text --region $REGION)
 
 aws ec2 describe-route-tables \
-    --route-table-ids $RTB_PRIVATE_ID \
+    --route-table-ids $RTB_PRIVATE1_ID \
     --query "RouteTables[].{RouteTableId:RouteTableId,VpcId:VpcId}" \
     --output table --region $REGION
 
 aws ec2 create-route \
-    --route-table-id $RTB_PRIVATE_ID \
+    --route-table-id $RTB_PRIVATE1_ID \
     --destination-cidr-block 0.0.0.0/0 \
     --nat-gateway-id $NATGW_ID \
     --query '{RouteCreated:Return}' \
@@ -125,8 +136,33 @@ aws ec2 create-route \
     --region $REGION
 
 aws ec2 associate-route-table \
-    --route-table-id $RTB_PRIVATE_ID \
-    --subnet-id $SUBNET_PRIVATE_ID \
+    --route-table-id $RTB_PRIVATE1_ID \
+    --subnet-id $SUBNET_PRIVATE1_ID \
+    --query '{AssociationId:AssociationId}' \
+    --output table \
+    --region $REGION
+
+echo -e "\nCriando Route Table privada 2..."
+RTB_PRIVATE2_ID=$(aws ec2 create-route-table --vpc-id $VPC_ID \
+    --tag-specifications "ResourceType=route-table,Tags=[{Key=Name,Value=${VPC_NAME}-rtb-private-2}]" \
+    --query 'RouteTable.RouteTableId' --output text --region $REGION)
+
+aws ec2 describe-route-tables \
+    --route-table-ids $RTB_PRIVATE2_ID \
+    --query "RouteTables[].{RouteTableId:RouteTableId,VpcId:VpcId}" \
+    --output table --region $REGION
+
+aws ec2 create-route \
+    --route-table-id $RTB_PRIVATE2_ID \
+    --destination-cidr-block 0.0.0.0/0 \
+    --nat-gateway-id $NATGW_ID \
+    --query '{RouteCreated:Return}' \
+    --output table \
+    --region $REGION
+
+aws ec2 associate-route-table \
+    --route-table-id $RTB_PRIVATE2_ID \
+    --subnet-id $SUBNET_PRIVATE2_ID \
     --query '{AssociationId:AssociationId}' \
     --output table \
     --region $REGION
@@ -166,52 +202,92 @@ aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
     --rule-number 400 --protocol tcp --port-range From=443,To=443 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
-    --rule-number 500 --protocol tcp --port-range From=3333,To=3333 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
-aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
-    --rule-number 600 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+    --rule-number 500 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
 # Regras de saída ACL pública
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --egress \
     --rule-number 100 --protocol -1 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
-echo -e "\nCriando ACL Privada"
-ACL_PRIVATE_ID=$(aws ec2 create-network-acl \
+echo -e "\nCriando ACL Privada 1"
+ACL_PRIVATE1_ID=$(aws ec2 create-network-acl \
     --vpc-id $VPC_ID \
-    --tag-specifications "ResourceType=network-acl,Tags=[{Key=Name,Value=acl-privada}]" \
+    --tag-specifications "ResourceType=network-acl,Tags=[{Key=Name,Value=acl-privada-1}]" \
     --query 'NetworkAcl.NetworkAclId' \
     --output text --region $REGION)
 
-ASSOC_ID_PRIVATE=$(aws ec2 describe-network-acls \
-    --filters "Name=association.subnet-id,Values=$SUBNET_PRIVATE_ID" \
+ASSOC_ID_PRIVATE1=$(aws ec2 describe-network-acls \
+    --filters "Name=association.subnet-id,Values=$SUBNET_PRIVATE1_ID" \
     --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
     --output text --region $REGION)
 
 aws ec2 replace-network-acl-association \
-    --association-id $ASSOC_ID_PRIVATE \
-    --network-acl-id $ACL_PRIVATE_ID \
+    --association-id $ASSOC_ID_PRIVATE1 \
+    --network-acl-id $ACL_PRIVATE1_ID \
     --region $REGION \
     >/dev/null
 
-# Mostrar ACL privada criada
+# Mostrar ACL privada criada 1
 aws ec2 describe-network-acls \
-    --network-acl-ids $ACL_PRIVATE_ID \
+    --network-acl-ids $ACL_PRIVATE1_ID \
     --query "NetworkAcls[].{ACL_ID:NetworkAclId,VPC:VpcId,Associations:Associations[].SubnetId}" \
     --output table --region $REGION
 
-# Regras de entrada ACL privada
-aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
+# Regras de entrada ACL privada 1
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE1_ID --ingress \
     --rule-number 100 --protocol tcp --port-range From=22,To=22 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
-aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
-    --rule-number 200 --protocol tcp --port-range From=3306,To=3306 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
-aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE1_ID --ingress \
+    --rule-number 200 --protocol tcp --port-range From=80,To=80 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE1_ID --ingress \
     --rule-number 300 --protocol tcp --port-range From=443,To=443 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
-aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE1_ID --ingress \
     --rule-number 400 --protocol tcp --port-range From=8080,To=8080 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
-aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --ingress \
-    --rule-number 500 --protocol tcp --port-range From=32000,To=65535 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE1_ID --ingress \
+    --rule-number 500 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
-# Regras de saída ACL privada
-aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE_ID --egress \
+# Regras de saída ACL privada 1
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE1_ID --egress \
+    --rule-number 100 --protocol -1 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+
+echo -e "\nCriando ACL Privada 2"
+ACL_PRIVATE2_ID=$(aws ec2 create-network-acl \
+    --vpc-id $VPC_ID \
+    --tag-specifications "ResourceType=network-acl,Tags=[{Key=Name,Value=acl-privada-2}]" \
+    --query 'NetworkAcl.NetworkAclId' \
+    --output text --region $REGION)
+
+ASSOC_ID_PRIVATE2=$(aws ec2 describe-network-acls \
+    --filters "Name=association.subnet-id,Values=$SUBNET_PRIVATE2_ID" \
+    --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
+    --output text --region $REGION)
+
+aws ec2 replace-network-acl-association \
+    --association-id $ASSOC_ID_PRIVATE2 \
+    --network-acl-id $ACL_PRIVATE2_ID \
+    --region $REGION \
+    >/dev/null
+
+# Mostrar ACL privada criada 2
+aws ec2 describe-network-acls \
+    --network-acl-ids $ACL_PRIVATE2_ID \
+    --query "NetworkAcls[].{ACL_ID:NetworkAclId,VPC:VpcId,Associations:Associations[].SubnetId}" \
+    --output table --region $REGION
+
+# Regras de entrada ACL privada 2
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE2_ID --ingress \
+    --rule-number 100 --protocol tcp --port-range From=22,To=22 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE2_ID --ingress \
+    --rule-number 200 --protocol tcp --port-range From=80,To=80 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE2_ID --ingress \
+    --rule-number 300 --protocol tcp --port-range From=3306,To=3306 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE2_ID --ingress \
+    --rule-number 400 --protocol tcp --port-range From=443,To=443 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE2_ID --ingress \
+    --rule-number 500 --protocol tcp --port-range From=8080,To=8080 --cidr-block $SUBNET_PUBLIC_CIDR --rule-action allow --region $REGION
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE2_ID --ingress \
+    --rule-number 600 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+
+# Regras de saída ACL privada 2
+aws ec2 create-network-acl-entry --network-acl-id $ACL_PRIVATE2_ID --egress \
     --rule-number 100 --protocol -1 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
 # Security Groups
@@ -255,23 +331,78 @@ aws ec2 authorize-security-group-ingress --group-id $SG_DB_ID --protocol tcp --p
 
 # Criar instâncias
 echo -e "\nCriando instâncias EC2..."
-INSTANCE_FRONT_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
-    --key-name $KEY_NAME --security-group-ids $SG_FRONT_ID --subnet-id $SUBNET_PUBLIC_ID --associate-public-ip-address \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-front}]" \
+INSTANCE_LB1_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
+    --key-name $KEY_NAME --security-group-ids $SG_FRONT_ID --subnet-id $SUBNET_PUBLIC_ID \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-load-balancer-1}]" \
+    --user-data file://config_lb1.sh \
     --query 'Instances[0].InstanceId' --output text --region $REGION)
-echo "Instância FRONT criada: $INSTANCE_FRONT_ID"
+echo "Instância LOAD BALANCER 1 criada: $INSTANCE_LB1_ID"
 
-INSTANCE_BACK_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
-    --key-name $KEY_NAME --security-group-ids $SG_BACK_ID --subnet-id $SUBNET_PRIVATE_ID \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-back}]" \
+INSTANCE_LB2_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
+    --key-name $KEY_NAME --security-group-ids $SG_FRONT_ID --subnet-id $SUBNET_PRIVATE1_ID \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-load-balancer-2}]" \
+    --user-data file://config_lb2.sh \
     --query 'Instances[0].InstanceId' --output text --region $REGION)
-echo "Instância BACK criada: $INSTANCE_BACK_ID"
+echo "Instância LOAD BALANCER 2 criada: $INSTANCE_LB2_ID"
+
+INSTANCE_FRONT1_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
+    --key-name $KEY_NAME --security-group-ids $SG_FRONT_ID --subnet-id $SUBNET_PRIVATE1_ID \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-front-1}]" \
+    --user-data file://config_front.sh \
+    --query 'Instances[0].InstanceId' --output text --region $REGION)
+echo "Instância FRONT 1 criada: $INSTANCE_FRONT1_ID"
+
+INSTANCE_FRONT2_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
+    --key-name $KEY_NAME --security-group-ids $SG_FRONT_ID --subnet-id $SUBNET_PRIVATE1_ID \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-front-2}]" \
+    --user-data file://config_front.sh \
+    --query 'Instances[0].InstanceId' --output text --region $REGION)
+echo "Instância FRONT 2 criada: $INSTANCE_FRONT2_ID"
+
+INSTANCE_BACK1_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
+    --key-name $KEY_NAME --security-group-ids $SG_BACK_ID --subnet-id $SUBNET_PRIVATE2_ID \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-back-1}]" \
+    --user-data file://config_back.sh \
+    --query 'Instances[0].InstanceId' --output text --region $REGION)
+echo "Instância BACK 1 criada: $INSTANCE_BACK1_ID"
+
+INSTANCE_BACK2_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
+    --key-name $KEY_NAME --security-group-ids $SG_BACK_ID --subnet-id $SUBNET_PRIVATE2_ID \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-back-2}]" \
+    --user-data file://config_back.sh \
+    --query 'Instances[0].InstanceId' --output text --region $REGION)
+echo "Instância BACK 2 criada: $INSTANCE_BACK2_ID"
 
 INSTANCE_DB_ID=$(aws ec2 run-instances --image-id $AMI_ID --count 1 --instance-type $INSTANCE_TYPE \
-    --key-name $KEY_NAME --security-group-ids $SG_DB_ID --subnet-id $SUBNET_PRIVATE_ID \
+    --key-name $KEY_NAME --security-group-ids $SG_DB_ID --subnet-id $SUBNET_PRIVATE2_ID \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-db}]" \
     --query 'Instances[0].InstanceId' --output text --region $REGION)
 echo "Instância DB criada: $INSTANCE_DB_ID"
+
+echo "Associando IP elástico na VM pública"
+ALLOCATION_ID=$(aws ec2 allocate-address \
+    --query 'AllocationId' \
+    --output text \
+    --region $REGION)
+
+echo -e "\nAssociando função IAM aos Load Balancer"
+aws ec2 associate-iam-instance-profile \
+    --instance-id "$INSTANCE_LB1_ID" \
+    --iam-instance-profile Name="LabInstanceProfile" \
+    --output text \
+    >/dev/null
+
+aws ec2 associate-iam-instance-profile \
+    --instance-id "$INSTANCE_LB2_ID" \
+    --iam-instance-profile Name="LabInstanceProfile" \
+    --output text \
+    >/dev/null
+
+aws ec2 associate-address \
+    --instance-id "$INSTANCE_LB1_ID" \
+    --allocation-id "$ALLOCATION_ID" \
+    --output text \
+    >/dev/null
 
 # Exibir tabela com IPs e nomes
 echo ""
@@ -279,6 +410,6 @@ echo "======================================"
 echo " Instâncias criadas na VPC $VPC_NAME "
 echo "======================================"
 aws ec2 describe-instances \
-    --instance-ids $INSTANCE_FRONT_ID $INSTANCE_BACK_ID $INSTANCE_DB_ID \
+    --filters "Name=vpc-id,Values=$VPC_ID" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
     --query "Reservations[].Instances[].{Name:Tags[?Key=='Name']|[0].Value,PrivateIP:PrivateIpAddress,PublicIP:PublicIpAddress}" \
     --output table --region $REGION
