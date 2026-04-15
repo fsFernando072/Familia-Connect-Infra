@@ -23,4 +23,4 @@ server {
 EOF
 
 # Reiniciar Nginx
-sudo systemctl restart nginx
+sudo systemctl reload nginx
