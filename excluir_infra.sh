@@ -19,6 +19,20 @@ aws ec2 describe-vpcs \
     --query "Vpcs[].{VpcId:VpcId,CIDR:CidrBlock}" \
     --output table --region $REGION
 
+echo "Excluindo Load Balancers..."
+aws elbv2 describe-load-balancers \
+    --query "LoadBalancers[?VpcId=='$VPC_ID'].{Name:LoadBalancerName,ARN:LoadBalancerArn}" \
+    --output table --region $REGION
+
+LB_ARNS=$(aws elbv2 describe-load-balancers \
+    --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+    --output text \
+    --region $REGION)
+for lb in $LB_ARNS; do
+    aws elbv2 delete-load-balancer --load-balancer-arn $lb --region $REGION || true
+    aws elbv2 wait load-balancers-deleted --load-balancer-arns $lb --region $REGION || true
+done
+
 echo "Excluindo instâncias..."
 INSTANCE_IDS=$(aws ec2 describe-instances \
     --filters "Name=vpc-id,Values=$VPC_ID" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
@@ -42,6 +56,15 @@ if [ -n "$INSTANCE_IDS" ]; then
 else
     echo "Nenhuma instância encontrada na VPC."
 fi
+
+echo "Excluindo Target Groups..."
+TG_ARNS=$(aws elbv2 describe-target-groups \
+    --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
+    --output text \
+    --region $REGION)
+for tg in $TG_ARNS; do
+    aws elbv2 delete-target-group --target-group-arn $tg --region $REGION || true
+done
 
 echo -e "\nExcluindo par de chaves..."
 aws ec2 delete-key-pair --key-name $KEY_NAME --region $REGION >/dev/null
@@ -113,12 +136,12 @@ done
 
 echo -e "\nExcluindo Route Tables..."
 RTB_IDS=$(aws ec2 describe-route-tables \
-    --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private-1,${VPC_NAME}-rtb-private-2" \
+    --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private" \
     --query "RouteTables[].RouteTableId" \
     --output text --region $REGION)
 
 aws ec2 describe-route-tables \
-    --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private-1,${VPC_NAME}-rtb-private-2" \
+    --filters "Name=tag:Name,Values=${VPC_NAME}-rtb-public,${VPC_NAME}-rtb-private" \
     --query "RouteTables[].{Name:Tags[?Key=='Name']|[0].Value,RouteTableId:RouteTableId}" \
     --output table --region $REGION
 

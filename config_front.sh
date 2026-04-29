@@ -1,4 +1,6 @@
 #!/bin/bash
-sudo apt update -y
+apt update -y
 
-sudo apt install -y nginx
+apt install -y nginx
+
+echo "<h1>Máquina com ip: $(hostname -f)</h1>" > /var/www/html/index.html
