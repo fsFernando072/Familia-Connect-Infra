@@ -1,0 +1,13 @@
+services:
+  back:
+    build: .
+    image: fsfernando072/familia-connect-back:latest
+    container_name: familia-connect-back
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_TYPE_DDL: ${DB_TYPE_DDL}
