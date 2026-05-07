@@ -247,7 +247,7 @@ ACL_PUBLIC_ID=$(aws ec2 create-network-acl \
 
 ASSOC_PUBLIC_A_ID=$(aws ec2 describe-network-acls \
     --filters "Name=association.subnet-id,Values=$SUBNET_PUBLIC_A_ID" \
-    --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
+    --query "NetworkAcls[].Associations[?SubnetId=='$SUBNET_PUBLIC_A_ID'].NetworkAclAssociationId" \
     --output text \
     --region $REGION)
 
@@ -259,7 +259,7 @@ aws ec2 replace-network-acl-association \
 
 ASSOC_PUBLIC_B_ID=$(aws ec2 describe-network-acls \
     --filters "Name=association.subnet-id,Values=$SUBNET_PUBLIC_B_ID" \
-    --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
+    --query "NetworkAcls[].Associations[?SubnetId=='$SUBNET_PUBLIC_B_ID'].NetworkAclAssociationId" \
     --output text \
     --region $REGION)
 
@@ -301,7 +301,7 @@ ACL_BACK_ID=$(aws ec2 create-network-acl \
 
 ASSOC_BACK_A_ID=$(aws ec2 describe-network-acls \
     --filters "Name=association.subnet-id,Values=$SUBNET_BACK_A_ID" \
-    --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
+    --query "NetworkAcls[].Associations[?SubnetId=='$SUBNET_BACK_A_ID'].NetworkAclAssociationId" \
     --output text \
     --region $REGION)
 
@@ -313,7 +313,7 @@ aws ec2 replace-network-acl-association \
 
 ASSOC_BACK_B_ID=$(aws ec2 describe-network-acls \
     --filters "Name=association.subnet-id,Values=$SUBNET_BACK_B_ID" \
-    --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
+    --query "NetworkAcls[].Associations[?SubnetId=='$SUBNET_BACK_B_ID'].NetworkAclAssociationId" \
     --output text \
     --region $REGION)
 
@@ -364,7 +364,7 @@ ACL_DB_ID=$(aws ec2 create-network-acl \
 
 ASSOC_DB_ID=$(aws ec2 describe-network-acls \
     --filters "Name=association.subnet-id,Values=$SUBNET_DB_A_ID" \
-    --query "NetworkAcls[0].Associations[0].NetworkAclAssociationId" \
+    --query "NetworkAcls[].Associations[?SubnetId=='$SUBNET_DB_A_ID'].NetworkAclAssociationId" \
     --output text --region $REGION)
 
 aws ec2 replace-network-acl-association \
