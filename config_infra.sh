@@ -285,7 +285,7 @@ aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
     --rule-number 400 --protocol tcp --port-range From=443,To=443 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --ingress \
-    --rule-number 500 --protocol tcp --port-range From=1024,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+    --rule-number 500 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
 # Regras de saída ACL pública
 aws ec2 create-network-acl-entry --network-acl-id $ACL_PUBLIC_ID --egress \
@@ -348,7 +348,7 @@ aws ec2 create-network-acl-entry --network-acl-id $ACL_BACK_ID --ingress \
 aws ec2 create-network-acl-entry --network-acl-id $ACL_BACK_ID --ingress \
     --rule-number 800 --protocol tcp --port-range From=8080,To=8080 --cidr-block $SUBNET_PUBLIC_B_CIDR --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_BACK_ID --ingress \
-    --rule-number 900 --protocol tcp --port-range From=1024,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+    --rule-number 900 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
 # Regras de saída ACL do back
 aws ec2 create-network-acl-entry --network-acl-id $ACL_BACK_ID --egress \
@@ -402,7 +402,7 @@ aws ec2 create-network-acl-entry --network-acl-id $ACL_DB_ID --ingress \
 aws ec2 create-network-acl-entry --network-acl-id $ACL_DB_ID --ingress \
     --rule-number 1000 --protocol tcp --port-range From=8080,To=8080 --cidr-block $SUBNET_BACK_B_CIDR --rule-action allow --region $REGION
 aws ec2 create-network-acl-entry --network-acl-id $ACL_DB_ID --ingress \
-    --rule-number 1100 --protocol tcp --port-range From=1024,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
+    --rule-number 1100 --protocol tcp --port-range From=32000,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow --region $REGION
 
 # Regras de saída ACL DB
 aws ec2 create-network-acl-entry --network-acl-id $ACL_DB_ID --egress \
