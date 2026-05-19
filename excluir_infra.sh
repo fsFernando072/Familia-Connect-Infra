@@ -210,3 +210,15 @@ echo -e "\nExcluindo VPC..."
 aws ec2 delete-vpc --vpc-id $VPC_ID --region $REGION || true
 
 echo -e "\nInfraestrutura da VPC $VPC_NAME excluída com sucesso!"
+
+# Excluir buckets S3
+echo -e "\nExcluindo buckets S3..."
+
+aws s3 rb s3://$S3_BRONZE_BUCKET --force
+echo "Bucket bronze excluído: $S3_BRONZE_BUCKET"
+
+aws s3 rb s3://$S3_SILVER_BUCKET --force
+echo "Bucket silver excluído: $S3_SILVER_BUCKET"
+
+aws s3 rb s3://$S3_GOLD_BUCKET --force
+echo "Bucket gold excluído: $S3_GOLD_BUCKET"
