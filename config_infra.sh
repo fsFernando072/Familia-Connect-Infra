@@ -12,6 +12,9 @@ REGION="us-east-1"
 AMI_ID="ami-0c7217cdde317cfec"   # Ubuntu Server 22.04 LTS (x86)
 INSTANCE_TYPE="t3.micro"
 KEY_NAME="myssh"
+S3_BRONZE_BUCKET="familia-connect-bronze-bucket"
+S3_SILVER_BUCKET="familia-connect-silver-bucket"
+S3_GOLD_BUCKET="familia-connect-gold-bucket"
 
 # Criar par de chaves
 echo "Criando par de chaves $KEY_NAME..."
@@ -660,3 +663,30 @@ aws ec2 describe-instances \
     --filters "Name=vpc-id,Values=$VPC_ID" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
     --query "Reservations[].Instances[].{Name:Tags[?Key=='Name']|[0].Value,PrivateIP:PrivateIpAddress,PublicIP:PublicIpAddress}" \
     --output table --region $REGION
+
+#Criar buckets S3
+echo -e "\nCriando buckets S3..."
+
+aws s3api create-bucket \
+    --bucket $S3_BRONZE_BUCKET \
+    --region $REGION
+
+echo "Bucket bronze criado: $S3_BRONZE_BUCKET"
+
+aws s3api create-bucket \
+    --bucket $S3_SILVER_BUCKET \
+    --region $REGION
+
+echo "Bucket silver criado: $S3_SILVER_BUCKET"
+
+aws s3api create-bucket \
+    --bucket $S3_GOLD_BUCKET \
+    --region $REGION
+
+echo "Bucket gold criado: $S3_GOLD_BUCKET"
+
+# Listar buckets criados
+aws s3api list-buckets \
+    --query "Buckets[].Name" \
+    --output table
+
