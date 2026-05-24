@@ -16,6 +16,81 @@ S3_BRONZE_BUCKET="familia-connect-bronze-bucket"
 S3_SILVER_BUCKET="familia-connect-silver-bucket"
 S3_GOLD_BUCKET="familia-connect-gold-bucket"
 
+# IAM para acesso aos buckets S3
+echo -e "\nCriando IAM Role para acesso aos buckets S3..."
+
+ROLE_NAME="familia-connect-s3-role"
+POLICY_NAME="familia-connect-s3-policy"
+INSTANCE_PROFILE_NAME="familia-connect-s3-profile"
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+cat > trust-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+
+aws iam create-role \
+  --role-name $ROLE_NAME \
+  --assume-role-policy-document file://trust-policy.json || true
+
+cat > s3-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::$S3_BRONZE_BUCKET",
+        "arn:aws:s3:::$S3_SILVER_BUCKET",
+        "arn:aws:s3:::$S3_GOLD_BUCKET"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::$S3_BRONZE_BUCKET/*",
+        "arn:aws:s3:::$S3_SILVER_BUCKET/*",
+        "arn:aws:s3:::$S3_GOLD_BUCKET/*"
+      ]
+    }
+  ]
+}
+EOF
+
+aws iam put-role-policy \
+  --role-name $ROLE_NAME \
+  --policy-name $POLICY_NAME \
+  --policy-document file://s3-policy.json
+
+aws iam create-instance-profile \
+  --instance-profile-name $INSTANCE_PROFILE_NAME || true
+
+aws iam add-role-to-instance-profile \
+  --instance-profile-name $INSTANCE_PROFILE_NAME \
+  --role-name $ROLE_NAME || true
+
+echo "IAM Role criado e configurado para acesso aos buckets."
+sleep 10
+
 # Criar par de chaves
 echo "Criando par de chaves $KEY_NAME..."
 aws ec2 create-key-pair \
@@ -466,6 +541,7 @@ INSTANCE_FRONT_A_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_FRONT_ID \
     --subnet-id $SUBNET_PUBLIC_A_ID \
+    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-front-A}]" \
     --user-data file://config_front.sh \
     --query 'Instances[0].InstanceId' \
@@ -480,6 +556,7 @@ INSTANCE_FRONT_B_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_FRONT_ID \
     --subnet-id $SUBNET_PUBLIC_B_ID \
+    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-front-B}]" \
     --user-data file://config_front.sh \
     --query 'Instances[0].InstanceId' \
@@ -494,6 +571,7 @@ INSTANCE_BACK_A_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_BACK_ID \
     --subnet-id $SUBNET_BACK_A_ID \
+    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-back-A}]" \
     --user-data file://config_back.sh \
     --query 'Instances[0].InstanceId' \
@@ -508,6 +586,7 @@ INSTANCE_BACK_B_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_BACK_ID \
     --subnet-id $SUBNET_BACK_B_ID \
+    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-back-B}]" \
     --user-data file://config_back.sh \
     --query 'Instances[0].InstanceId' \
@@ -522,6 +601,7 @@ INSTANCE_DB_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_DB_ID \
     --subnet-id $SUBNET_DB_A_ID \
+    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-db}]" \
     --user-data file://config_db.sh \
     --query 'Instances[0].InstanceId' \
