@@ -6,6 +6,38 @@ S3_BRONZE_BUCKET="familia-connect-bronze-bucket"
 S3_SILVER_BUCKET="familia-connect-silver-bucket"
 S3_GOLD_BUCKET="familia-connect-gold-bucket"
 
+ALARM_NAMES=$(aws cloudwatch describe-alarms \
+    --query "MetricAlarms[].AlarmName" \
+    --output text \
+    --region $REGION)
+
+if [ -n "$ALARM_NAMES" ]; then
+    aws cloudwatch delete-alarms \
+        --alarm-names $ALARM_NAMES \
+        --region $REGION
+
+    echo "Alarmes CloudWatch excluídos."
+else
+    echo "Nenhum alarme CloudWatch encontrado."
+fi
+
+echo -e "\nExcluindo tópico SNS..."
+
+SNS_TOPIC_ARN=$(aws sns list-topics \
+    --query "Topics[?contains(TopicArn, 'familia-connect-cloudwatch-alerts')].TopicArn" \
+    --output text \
+    --region $REGION)
+
+if [ -n "$SNS_TOPIC_ARN" ]; then
+    aws sns delete-topic \
+        --topic-arn $SNS_TOPIC_ARN \
+        --region $REGION
+
+    echo "SNS excluído."
+else
+    echo "Nenhum tópico SNS encontrado."
+fi
+
 # Obter VPC
 VPC_ID=$(aws ec2 describe-vpcs \
     --filters Name=tag:Name,Values=$VPC_NAME \
@@ -225,3 +257,34 @@ echo "Bucket silver excluído: $S3_SILVER_BUCKET"
 
 aws s3 rb s3://$S3_GOLD_BUCKET --force
 echo "Bucket gold excluído: $S3_GOLD_BUCKET"
+
+echo -e "\nExcluindo alarmes CloudWatch..."
+
+echo -e "\nExcluindo IAM Role e Instance Profile..."
+
+ROLE_NAME="familia-connect-s3-role"
+POLICY_NAME="familia-connect-s3-policy"
+INSTANCE_PROFILE_NAME="familia-connect-s3-profile"
+
+aws iam remove-role-from-instance-profile \
+    --instance-profile-name $INSTANCE_PROFILE_NAME \
+    --role-name $ROLE_NAME \
+    2>/dev/null || true
+
+aws iam delete-instance-profile \
+    --instance-profile-name $INSTANCE_PROFILE_NAME \
+    2>/dev/null || true
+
+aws iam delete-role-policy \
+    --role-name $ROLE_NAME \
+    --policy-name $POLICY_NAME \
+    2>/dev/null || true
+
+aws iam delete-role \
+    --role-name $ROLE_NAME \
+    2>/dev/null || true
+
+rm -f trust-policy.json
+rm -f s3-policy.json
+
+echo "IAM removido com sucesso."
