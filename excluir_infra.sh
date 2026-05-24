@@ -2,6 +2,9 @@
 REGION="us-east-1"
 VPC_NAME="vpc-familia-connect"
 KEY_NAME="myssh"
+S3_BRONZE_BUCKET="familia-connect-bronze-bucket"
+S3_SILVER_BUCKET="familia-connect-silver-bucket"
+S3_GOLD_BUCKET="familia-connect-gold-bucket"
 
 # Obter VPC
 VPC_ID=$(aws ec2 describe-vpcs \
