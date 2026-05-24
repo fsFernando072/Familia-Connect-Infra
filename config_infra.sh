@@ -770,3 +770,118 @@ aws s3api list-buckets \
     --query "Buckets[].Name" \
     --output table
 
+echo -e "\nCriando alarmes CloudWatch..."
+
+SNS_TOPIC_NAME="familia-connect-cloudwatch-alerts"
+
+SNS_TOPIC_ARN=$(aws sns create-topic \
+  --name $SNS_TOPIC_NAME \
+  --query TopicArn \
+  --output text \
+  --region $REGION)
+
+ALL_INSTANCES="$INSTANCE_FRONT_A_ID $INSTANCE_FRONT_B_ID $INSTANCE_BACK_A_ID $INSTANCE_BACK_B_ID $INSTANCE_DB_ID"
+FRONT_INSTANCES="$INSTANCE_FRONT_A_ID $INSTANCE_FRONT_B_ID"
+
+for INSTANCE in $ALL_INSTANCES; do
+  aws cloudwatch put-metric-alarm \
+    --alarm-name "${INSTANCE}-CPUUtilization-High" \
+    --namespace AWS/EC2 \
+    --metric-name CPUUtilization \
+    --statistic Average \
+    --period 300 \
+    --threshold 80 \
+    --comparison-operator GreaterThanThreshold \
+    --dimensions Name=InstanceId,Value=$INSTANCE \
+    --evaluation-periods 2 \
+    --alarm-actions $SNS_TOPIC_ARN \
+    --region $REGION
+done
+
+for INSTANCE in $FRONT_INSTANCES; do
+  aws cloudwatch put-metric-alarm \
+    --alarm-name "${INSTANCE}-NetworkIn-High" \
+    --namespace AWS/EC2 \
+    --metric-name NetworkIn \
+    --statistic Sum \
+    --period 300 \
+    --threshold 100000000 \
+    --comparison-operator GreaterThanThreshold \
+    --dimensions Name=InstanceId,Value=$INSTANCE \
+    --evaluation-periods 2 \
+    --alarm-actions $SNS_TOPIC_ARN \
+    --region $REGION
+
+  aws cloudwatch put-metric-alarm \
+    --alarm-name "${INSTANCE}-NetworkOut-High" \
+    --namespace AWS/EC2 \
+    --metric-name NetworkOut \
+    --statistic Sum \
+    --period 300 \
+    --threshold 100000000 \
+    --comparison-operator GreaterThanThreshold \
+    --dimensions Name=InstanceId,Value=$INSTANCE \
+    --evaluation-periods 2 \
+    --alarm-actions $SNS_TOPIC_ARN \
+    --region $REGION
+done
+
+LB_BACK_DIMENSION=$(echo $LB_BACK_ARN | cut -d'/' -f2-)
+TG_BACK_DIMENSION=$(echo $TG_BACK_ARN | cut -d':' -f6 | cut -d'/' -f2-)
+
+aws cloudwatch put-metric-alarm \
+  --alarm-name "lb-back-TargetResponseTime-High" \
+  --namespace AWS/ApplicationELB \
+  --metric-name TargetResponseTime \
+  --statistic Average \
+  --period 300 \
+  --threshold 2 \
+  --comparison-operator GreaterThanThreshold \
+  --dimensions Name=LoadBalancer,Value=$LB_BACK_DIMENSION Name=TargetGroup,Value=$TG_BACK_DIMENSION \
+  --evaluation-periods 2 \
+  --alarm-actions $SNS_TOPIC_ARN \
+  --region $REGION
+
+aws cloudwatch put-metric-alarm \
+  --alarm-name "tg-back-HealthyHostCount-Low" \
+  --namespace AWS/ApplicationELB \
+  --metric-name HealthyHostCount \
+  --statistic Average \
+  --period 300 \
+  --threshold 1 \
+  --comparison-operator LessThanOrEqualToThreshold \
+  --dimensions Name=LoadBalancer,Value=$LB_BACK_DIMENSION Name=TargetGroup,Value=$TG_BACK_DIMENSION \
+  --evaluation-periods 1 \
+  --alarm-actions $SNS_TOPIC_ARN \
+  --region $REGION
+
+aws cloudwatch put-metric-alarm \
+  --alarm-name "ec2-db-disk-used-percent-high" \
+  --namespace CWAgent \
+  --metric-name disk_used_percent \
+  --statistic Average \
+  --period 300 \
+  --threshold 85 \
+  --comparison-operator GreaterThanThreshold \
+  --dimensions Name=InstanceId,Value=$INSTANCE_DB_ID Name=path,Value=/ Name=fstype,Value=ext4 \
+  --evaluation-periods 2 \
+  --alarm-actions $SNS_TOPIC_ARN \
+  --region $REGION
+
+for BUCKET in $S3_BRONZE_BUCKET $S3_SILVER_BUCKET $S3_GOLD_BUCKET; do
+  aws cloudwatch put-metric-alarm \
+    --alarm-name "${BUCKET}-BucketSizeBytes-High" \
+    --namespace AWS/S3 \
+    --metric-name BucketSizeBytes \
+    --statistic Average \
+    --period 86400 \
+    --threshold 5000000000 \
+    --comparison-operator GreaterThanThreshold \
+    --dimensions Name=BucketName,Value=$BUCKET Name=StorageType,Value=StandardStorage \
+    --evaluation-periods 1 \
+    --alarm-actions $SNS_TOPIC_ARN \
+    --region $REGION
+done
+
+echo "Alarmes CloudWatch criados com sucesso."
+
