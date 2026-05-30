@@ -259,32 +259,3 @@ aws s3 rb s3://$S3_GOLD_BUCKET --force
 echo "Bucket gold excluído: $S3_GOLD_BUCKET"
 
 echo -e "\nExcluindo alarmes CloudWatch..."
-
-echo -e "\nExcluindo IAM Role e Instance Profile..."
-
-ROLE_NAME="familia-connect-s3-role"
-POLICY_NAME="familia-connect-s3-policy"
-INSTANCE_PROFILE_NAME="familia-connect-s3-profile"
-
-aws iam remove-role-from-instance-profile \
-    --instance-profile-name $INSTANCE_PROFILE_NAME \
-    --role-name $ROLE_NAME \
-    2>/dev/null || true
-
-aws iam delete-instance-profile \
-    --instance-profile-name $INSTANCE_PROFILE_NAME \
-    2>/dev/null || true
-
-aws iam delete-role-policy \
-    --role-name $ROLE_NAME \
-    --policy-name $POLICY_NAME \
-    2>/dev/null || true
-
-aws iam delete-role \
-    --role-name $ROLE_NAME \
-    2>/dev/null || true
-
-rm -f trust-policy.json
-rm -f s3-policy.json
-
-echo "IAM removido com sucesso."
