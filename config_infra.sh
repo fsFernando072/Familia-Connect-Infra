@@ -466,7 +466,6 @@ INSTANCE_FRONT_A_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_FRONT_ID \
     --subnet-id $SUBNET_PUBLIC_A_ID \
-    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-front-A}]" \
     --user-data file://config_front.sh \
     --query 'Instances[0].InstanceId' \
@@ -481,7 +480,6 @@ INSTANCE_FRONT_B_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_FRONT_ID \
     --subnet-id $SUBNET_PUBLIC_B_ID \
-    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-front-B}]" \
     --user-data file://config_front.sh \
     --query 'Instances[0].InstanceId' \
@@ -496,7 +494,6 @@ INSTANCE_BACK_A_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_BACK_ID \
     --subnet-id $SUBNET_BACK_A_ID \
-    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-back-A}]" \
     --user-data file://config_back.sh \
     --query 'Instances[0].InstanceId' \
@@ -511,7 +508,6 @@ INSTANCE_BACK_B_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_BACK_ID \
     --subnet-id $SUBNET_BACK_B_ID \
-    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-back-B}]" \
     --user-data file://config_back.sh \
     --query 'Instances[0].InstanceId' \
@@ -526,13 +522,41 @@ INSTANCE_DB_ID=$(aws ec2 run-instances \
     --key-name $KEY_NAME \
     --security-group-ids $SG_DB_ID \
     --subnet-id $SUBNET_DB_A_ID \
-    --iam-instance-profile Name=$INSTANCE_PROFILE_NAME \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=ec2-db}]" \
     --user-data file://config_db.sh \
     --query 'Instances[0].InstanceId' \
     --output text \
     --region $REGION)
 echo "Instância DB criada: $INSTANCE_DB_ID"
+
+echo -e "\nAssociando IAM às instâncias"
+
+aws ec2 associate-iam-instance-profile \
+    --instance-id "$INSTANCE_FRONT_A_ID" \
+    --iam-instance-profile Name="LabInstanceProfile" \
+    --region $REGION
+
+aws ec2 associate-iam-instance-profile \
+    --instance-id "$INSTANCE_FRONT_B_ID" \
+    --iam-instance-profile Name="LabInstanceProfile" \
+    --region $REGION
+
+aws ec2 associate-iam-instance-profile \
+    --instance-id "$INSTANCE_BACK_A_ID" \
+    --iam-instance-profile Name="LabInstanceProfile" \
+    --region $REGION
+
+aws ec2 associate-iam-instance-profile \
+    --instance-id "$INSTANCE_BACK_B_ID" \
+    --iam-instance-profile Name="LabInstanceProfile" \
+    --region $REGION
+
+echo -e "\nIAM associada às instâncias"
+
+aws ec2 associate-iam-instance-profile \
+    --instance-id "$INSTANCE_DB_ID" \
+    --iam-instance-profile Name="LabInstanceProfile" \
+    --region $REGION
 
 echo -e "\nAssociando IP elástico nas VMs públicas"
 ALLOCATION_A_ID=$(aws ec2 allocate-address \
