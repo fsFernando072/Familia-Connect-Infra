@@ -15,6 +15,13 @@ KEY_NAME="myssh"
 S3_BRONZE_BUCKET="familia-connect-bronze-bucket"
 S3_SILVER_BUCKET="familia-connect-silver-bucket"
 S3_GOLD_BUCKET="familia-connect-gold-bucket"
+EMAILS=(
+  "anna.maegaki@sptech.school"
+  "fernando.fsilva@sptech.school"
+  "gabriel.castilho@sptech.school"
+  "miguel.ramos@sptech.school"
+  "joao.oliveiraneto@sptech.school"
+)
 
 # Criar par de chaves
 echo "Criando par de chaves $KEY_NAME..."
@@ -834,3 +841,12 @@ done
 
 echo "Alarmes CloudWatch criados com sucesso."
 
+for EMAIL in "${EMAILS[@]}"; do
+  aws sns subscribe \
+    --topic-arn $SNS_TOPIC_ARN \
+    --protocol email \
+    --notification-endpoint $EMAIL \
+    --region $REGION
+done
+
+echo "Emails para envio dos alarmes associados."
