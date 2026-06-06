@@ -38,6 +38,12 @@ else
     echo "Nenhum tópico SNS encontrado."
 fi
 
+aws cloudwatch delete-dashboards \
+  --dashboard-names "familia-connect-dashboard" \
+  --region $REGION
+
+echo "Dashboard CloudWatch excluído."
+
 # Obter VPC
 VPC_ID=$(aws ec2 describe-vpcs \
     --filters Name=tag:Name,Values=$VPC_NAME \
