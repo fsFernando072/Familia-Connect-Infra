@@ -850,3 +850,154 @@ for EMAIL in "${EMAILS[@]}"; do
 done
 
 echo "Emails para envio dos alarmes associados."
+
+echo -e "\nCriando Dashboard CloudWatch..."
+
+DASHBOARD_BODY=$(cat <<EOF
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Utilização de CPU EC2",
+        "region": "$REGION",
+        "stat": "Average",
+        "period": 300,
+        "metrics": [
+          [ "AWS/EC2", "CPUUtilization", "InstanceId", "$INSTANCE_FRONT_A_ID" ],
+          [ ".", ".", ".", "$INSTANCE_FRONT_B_ID" ],
+          [ ".", ".", ".", "$INSTANCE_BACK_A_ID" ],
+          [ ".", ".", ".", "$INSTANCE_BACK_B_ID" ],
+          [ ".", ".", ".", "$INSTANCE_DB_ID" ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Network Front-end",
+        "region": "$REGION",
+        "stat": "Sum",
+        "period": 300,
+        "metrics": [
+          [ "AWS/EC2", "NetworkIn", "InstanceId", "$INSTANCE_FRONT_A_ID" ],
+          [ "AWS/EC2", "NetworkOut", "InstanceId", "$INSTANCE_FRONT_A_ID" ],
+          [ "AWS/EC2", "NetworkIn", "InstanceId", "$INSTANCE_FRONT_B_ID" ],
+          [ "AWS/EC2", "NetworkOut", "InstanceId", "$INSTANCE_FRONT_B_ID" ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Load Balancer",
+        "region": "$REGION",
+        "stat": "Average",
+        "period": 300,
+        "metrics": [
+          [
+            "AWS/ApplicationELB",
+            "TargetResponseTime",
+            "LoadBalancer",
+            "$LB_BACK_DIMENSION",
+            "TargetGroup",
+            "$TG_BACK_DIMENSION"
+          ],
+          [
+            ".",
+            "HealthyHostCount",
+            ".",
+            ".",
+            ".",
+            "."
+          ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Disco Banco de Dados",
+        "region": "$REGION",
+        "stat": "Average",
+        "period": 300,
+        "metrics": [
+          [
+            "CWAgent",
+            "disk_used_percent",
+            "InstanceId",
+            "$INSTANCE_DB_ID",
+            "path",
+            "/",
+            "fstype",
+            "ext4"
+          ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "title": "Buckets S3",
+        "region": "$REGION",
+        "stat": "Average",
+        "period": 86400,
+        "metrics": [
+          [
+            "AWS/S3",
+            "BucketSizeBytes",
+            "BucketName",
+            "$S3_BRONZE_BUCKET",
+            "StorageType",
+            "StandardStorage"
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            "$S3_SILVER_BUCKET",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            "$S3_GOLD_BUCKET",
+            ".",
+            "."
+          ]
+        ]
+      }
+    }
+  ]
+}
+EOF
+)
+
+aws cloudwatch put-dashboard \
+  --dashboard-name "familia-connect-dashboard" \
+  --dashboard-body "$DASHBOARD_BODY" \
+  --region "$REGION"
+
+echo "Dashboard CloudWatch criado com sucesso."
