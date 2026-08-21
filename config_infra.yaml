@@ -1,0 +1,1306 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::LanguageExtensions
+Description: >
+  Infraestrutura do Familia-Connect (VPC, sub-redes, NAT/IGW, NACLs, Security Groups,
+  EC2, Load Balancers, S3, CloudWatch/SNS) — equivalente ao config_infra.sh.
+  As referências às configurações internas das VMs (config_front.sh, config_back.sh,
+  config_db.sh via user-data) foram removidas por enquanto.
+
+# Integrantes - Grupo 2
+# Anna Luiza Yassue Segarra Maegaki - 04251020
+# Fernando Ferreira da Silva - 04251013
+# Gabriel Rodrigues de Oliveira Castilho - 04251067 
+# João de Oliveira Neto - 04251133
+# Miguel Ramos Lima - 04251106
+
+
+Parameters:
+  VpcName:
+    Type: String
+    Default: vpc-familia-connect
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/20
+
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.0.1.0/24
+
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.0.2.0/24
+
+  BackSubnetACidr:
+    Type: String
+    Default: 10.0.3.0/24
+
+  BackSubnetBCidr:
+    Type: String
+    Default: 10.0.4.0/24
+
+  DbSubnetACidr:
+    Type: String
+    Default: 10.0.5.0/24
+
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0c7217cdde317cfec
+    Description: Ubuntu Server 22.04 LTS (x86)
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+
+  KeyPairName:
+    Type: String
+    Default: myssh
+    Description: Nome do par de chaves EC2 que será criado pela stack.
+
+  IamInstanceProfileName:
+    Type: String
+    Default: LabInstanceProfile
+    Description: Nome de um Instance Profile IAM já existente na conta.
+
+  S3BronzeBucketName:
+    Type: String
+    Default: familia-connect-bronze-g02
+
+  S3SilverBucketName:
+    Type: String
+    Default: familia-connect-silver-g02
+
+  S3GoldBucketName:
+    Type: String
+    Default: familia-connect-gold-g02
+
+  AlertEmails:
+    Type: CommaDelimitedList
+    Default: >-
+      anna.maegaki@sptech.school,fernando.fsilva@sptech.school,gabriel.castilho@sptech.school,miguel.ramos@sptech.school,joao.oliveiraneto@sptech.school
+    Description: Lista de e-mails que receberão os alarmes via SNS.
+
+Resources:
+
+  # ---------------------------------------------------------------------
+  # Par de chaves
+  # ---------------------------------------------------------------------
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Ref KeyPairName
+      KeyType: rsa
+      Tags:
+        - Key: Name
+          Value: !Ref KeyPairName
+
+  # ---------------------------------------------------------------------
+  # VPC e sub-redes
+  # ---------------------------------------------------------------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  SubnetPublicA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: sub-rede-publica-A
+
+  SubnetPublicB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: sub-rede-publica-B
+
+  SubnetBackA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref BackSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: sub-rede-back-A
+
+  SubnetBackB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref BackSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: sub-rede-back-B
+
+  SubnetDbA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref DbSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: sub-rede-db-A
+
+  # ---------------------------------------------------------------------
+  # Internet Gateway + Rotas públicas
+  # ---------------------------------------------------------------------
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${VpcName}-igw"
+
+  IgwAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${VpcName}-rtb-public"
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicRouteTableAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref SubnetPublicA
+
+  PublicRouteTableAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref SubnetPublicB
+
+  # ---------------------------------------------------------------------
+  # NAT Gateway + Rotas privadas
+  # ---------------------------------------------------------------------
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref SubnetPublicA
+      AllocationId: !GetAtt NatEip.AllocationId
+      Tags:
+        - Key: Name
+          Value: !Sub "${VpcName}-natgw"
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${VpcName}-rtb-private"
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateRouteTableAssocBackA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref SubnetBackA
+
+  PrivateRouteTableAssocBackB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref SubnetBackB
+
+  PrivateRouteTableAssocDbA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref SubnetDbA
+
+  # ---------------------------------------------------------------------
+  # Network ACL pública
+  # ---------------------------------------------------------------------
+  AclPublic:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: acl-publica
+
+  AclPublicAssocA:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref SubnetPublicA
+      NetworkAclId: !Ref AclPublic
+
+  AclPublicAssocB:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref SubnetPublicB
+      NetworkAclId: !Ref AclPublic
+
+  AclPublicIngress100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclPublic
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange: { From: 22, To: 22 }
+
+  AclPublicIngress200:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclPublic
+      RuleNumber: 200
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange: { From: 80, To: 80 }
+
+  AclPublicIngress300:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclPublic
+      RuleNumber: 300
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange: { From: 8080, To: 8080 }
+
+  AclPublicIngress400:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclPublic
+      RuleNumber: 400
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange: { From: 443, To: 443 }
+
+  AclPublicIngress500:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclPublic
+      RuleNumber: 500
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange: { From: 32000, To: 65535 }
+
+  AclPublicEgress100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclPublic
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+
+  # ---------------------------------------------------------------------
+  # Network ACL do back
+  # ---------------------------------------------------------------------
+  AclBack:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: acl-back
+
+  AclBackAssocA:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref SubnetBackA
+      NetworkAclId: !Ref AclBack
+
+  AclBackAssocB:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref SubnetBackB
+      NetworkAclId: !Ref AclBack
+
+  AclBackIngress100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref PublicSubnetACidr
+      PortRange: { From: 22, To: 22 }
+
+  AclBackIngress200:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 200
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref PublicSubnetBCidr
+      PortRange: { From: 22, To: 22 }
+
+  AclBackIngress300:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 300
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref PublicSubnetACidr
+      PortRange: { From: 80, To: 80 }
+
+  AclBackIngress400:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 400
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref PublicSubnetBCidr
+      PortRange: { From: 80, To: 80 }
+
+  AclBackIngress500:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 500
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref PublicSubnetACidr
+      PortRange: { From: 443, To: 443 }
+
+  AclBackIngress600:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 600
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref PublicSubnetBCidr
+      PortRange: { From: 443, To: 443 }
+
+  AclBackIngress700:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 700
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref PublicSubnetACidr
+      PortRange: { From: 8080, To: 8080 }
+
+  AclBackIngress800:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 800
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref PublicSubnetBCidr
+      PortRange: { From: 8080, To: 8080 }
+
+  AclBackIngress900:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 900
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange: { From: 32000, To: 65535 }
+
+  AclBackEgress100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclBack
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+
+  # ---------------------------------------------------------------------
+  # Network ACL do banco de dados
+  # ---------------------------------------------------------------------
+  AclDb:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: acl-db
+
+  AclDbAssocA:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref SubnetDbA
+      NetworkAclId: !Ref AclDb
+
+  AclDbIngress100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetACidr
+      PortRange: { From: 22, To: 22 }
+
+  AclDbIngress200:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 200
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetBCidr
+      PortRange: { From: 22, To: 22 }
+
+  AclDbIngress300:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 300
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetACidr
+      PortRange: { From: 80, To: 80 }
+
+  AclDbIngress400:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 400
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetBCidr
+      PortRange: { From: 80, To: 80 }
+
+  AclDbIngress500:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 500
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetACidr
+      PortRange: { From: 3306, To: 3306 }
+
+  AclDbIngress600:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 600
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetBCidr
+      PortRange: { From: 3306, To: 3306 }
+
+  AclDbIngress700:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 700
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetACidr
+      PortRange: { From: 443, To: 443 }
+
+  AclDbIngress800:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 800
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetBCidr
+      PortRange: { From: 443, To: 443 }
+
+  AclDbIngress900:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 900
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetACidr
+      PortRange: { From: 8080, To: 8080 }
+
+  AclDbIngress1000:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 1000
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref BackSubnetBCidr
+      PortRange: { From: 8080, To: 8080 }
+
+  AclDbIngress1100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 1100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange: { From: 32000, To: 65535 }
+
+  AclDbEgress100:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref AclDb
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+
+  # ---------------------------------------------------------------------
+  # Security Groups
+  # ---------------------------------------------------------------------
+  SgFront:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: front-sg
+      GroupDescription: Front-end SG
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3333
+          ToPort: 3333
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: front-sg
+
+  SgBack:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: back-sg
+      GroupDescription: Back-end SG
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref SgFront
+      Tags:
+        - Key: Name
+          Value: back-sg
+
+  SgDb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: db-sg
+      GroupDescription: Database SG
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref SgBack
+      Tags:
+        - Key: Name
+          Value: db-sg
+
+  # ---------------------------------------------------------------------
+  # Instâncias EC2 (sem user-data / configs de VM por enquanto)
+  # ---------------------------------------------------------------------
+  InstanceFrontA:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref SubnetPublicA
+      SecurityGroupIds: [!Ref SgFront]
+      IamInstanceProfile: !Ref IamInstanceProfileName
+      Tags:
+        - Key: Name
+          Value: ec2-front-A
+    DependsOn: KeyPair
+
+  InstanceFrontB:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref SubnetPublicB
+      SecurityGroupIds: [!Ref SgFront]
+      IamInstanceProfile: !Ref IamInstanceProfileName
+      Tags:
+        - Key: Name
+          Value: ec2-front-B
+    DependsOn: KeyPair
+
+  InstanceBackA:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref SubnetBackA
+      SecurityGroupIds: [!Ref SgBack]
+      IamInstanceProfile: !Ref IamInstanceProfileName
+      Tags:
+        - Key: Name
+          Value: ec2-back-A
+    DependsOn: KeyPair
+
+  InstanceBackB:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref SubnetBackB
+      SecurityGroupIds: [!Ref SgBack]
+      IamInstanceProfile: !Ref IamInstanceProfileName
+      Tags:
+        - Key: Name
+          Value: ec2-back-B
+    DependsOn: KeyPair
+
+  InstanceDb:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref SubnetDbA
+      SecurityGroupIds: [!Ref SgDb]
+      IamInstanceProfile: !Ref IamInstanceProfileName
+      Tags:
+        - Key: Name
+          Value: ec2-db
+    DependsOn: KeyPair
+
+  # ---------------------------------------------------------------------
+  # IPs elásticos das VMs públicas
+  # ---------------------------------------------------------------------
+  EipFrontA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref InstanceFrontA
+
+  EipFrontB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref InstanceFrontB
+
+  # ---------------------------------------------------------------------
+  # Load Balancer FRONT (internet-facing)
+  # ---------------------------------------------------------------------
+  LbFront:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: lb-front
+      Type: application
+      Scheme: internet-facing
+      Subnets:
+        - !Ref SubnetPublicA
+        - !Ref SubnetPublicB
+      SecurityGroups: [!Ref SgFront]
+
+  TgFront:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: tg-front
+      Protocol: HTTP
+      Port: 80
+      VpcId: !Ref Vpc
+      TargetType: instance
+      HealthCheckPath: /
+      Targets:
+        - Id: !Ref InstanceFrontA
+        - Id: !Ref InstanceFrontB
+
+  ListenerFront:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LbFront
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TgFront
+
+  # ---------------------------------------------------------------------
+  # Load Balancer BACK (interno)
+  # ---------------------------------------------------------------------
+  LbBack:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: lb-back
+      Type: application
+      Scheme: internal
+      Subnets:
+        - !Ref SubnetBackA
+        - !Ref SubnetBackB
+      SecurityGroups: [!Ref SgBack]
+
+  TgBack:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: tg-back
+      Protocol: HTTP
+      Port: 8080
+      VpcId: !Ref Vpc
+      TargetType: instance
+      HealthCheckPath: /
+      Targets:
+        - Id: !Ref InstanceBackA
+        - Id: !Ref InstanceBackB
+
+  ListenerBack:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LbBack
+      Protocol: HTTP
+      Port: 8080
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TgBack
+
+  # ---------------------------------------------------------------------
+  # Buckets S3
+  # ---------------------------------------------------------------------
+  S3BronzeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BronzeBucketName
+
+  S3SilverBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3SilverBucketName
+
+  S3GoldBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3GoldBucketName
+
+  # ---------------------------------------------------------------------
+  # SNS (alarmes) + inscrições de e-mail
+  # ---------------------------------------------------------------------
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: familia-connect-cloudwatch-alerts
+
+  'Fn::ForEach::EmailSubscriptions':
+    - Email
+    - !Ref AlertEmails
+    - 'Subscription&{Email}':
+        Type: AWS::SNS::Subscription
+        Properties:
+          TopicArn: !Ref AlertsTopic
+          Protocol: email
+          Endpoint: !Ref Email
+
+  # ---------------------------------------------------------------------
+  # Alarmes CloudWatch — CPU (todas as instâncias)
+  # ---------------------------------------------------------------------
+  AlarmCpuFrontA:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceFrontA}-CPUUtilization-High"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceFrontA
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmCpuFrontB:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceFrontB}-CPUUtilization-High"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceFrontB
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmCpuBackA:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceBackA}-CPUUtilization-High"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceBackA
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmCpuBackB:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceBackB}-CPUUtilization-High"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceBackB
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmCpuDb:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceDb}-CPUUtilization-High"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceDb
+      AlarmActions: [!Ref AlertsTopic]
+
+  # ---------------------------------------------------------------------
+  # Alarmes CloudWatch — Network In/Out (instâncias FRONT)
+  # ---------------------------------------------------------------------
+  AlarmNetworkInFrontA:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceFrontA}-NetworkIn-High"
+      Namespace: AWS/EC2
+      MetricName: NetworkIn
+      Statistic: Sum
+      Period: 300
+      Threshold: 100000000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceFrontA
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmNetworkOutFrontA:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceFrontA}-NetworkOut-High"
+      Namespace: AWS/EC2
+      MetricName: NetworkOut
+      Statistic: Sum
+      Period: 300
+      Threshold: 100000000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceFrontA
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmNetworkInFrontB:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceFrontB}-NetworkIn-High"
+      Namespace: AWS/EC2
+      MetricName: NetworkIn
+      Statistic: Sum
+      Period: 300
+      Threshold: 100000000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceFrontB
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmNetworkOutFrontB:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${InstanceFrontB}-NetworkOut-High"
+      Namespace: AWS/EC2
+      MetricName: NetworkOut
+      Statistic: Sum
+      Period: 300
+      Threshold: 100000000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceFrontB
+      AlarmActions: [!Ref AlertsTopic]
+
+  # ---------------------------------------------------------------------
+  # Alarmes CloudWatch — Load Balancer BACK
+  # ---------------------------------------------------------------------
+  AlarmLbBackLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: lb-back-TargetResponseTime-High
+      Namespace: AWS/ApplicationELB
+      MetricName: TargetResponseTime
+      Statistic: Average
+      Period: 300
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt LbBack.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt TgBack.TargetGroupFullName
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmTgBackHealthyHosts:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: tg-back-HealthyHostCount-Low
+      Namespace: AWS/ApplicationELB
+      MetricName: HealthyHostCount
+      Statistic: Average
+      Period: 300
+      Threshold: 1
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt LbBack.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt TgBack.TargetGroupFullName
+      AlarmActions: [!Ref AlertsTopic]
+
+  # ---------------------------------------------------------------------
+  # Alarme CloudWatch — Disco do banco (requer CloudWatch Agent na VM)
+  # ---------------------------------------------------------------------
+  AlarmDbDiskUsed:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ec2-db-disk-used-percent-high
+      Namespace: CWAgent
+      MetricName: disk_used_percent
+      Statistic: Average
+      Period: 300
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref InstanceDb
+        - Name: path
+          Value: /
+        - Name: fstype
+          Value: ext4
+      AlarmActions: [!Ref AlertsTopic]
+
+  # ---------------------------------------------------------------------
+  # Alarmes CloudWatch — Buckets S3
+  # ---------------------------------------------------------------------
+  AlarmBronzeBucketSize:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${S3BronzeBucketName}-BucketSizeBytes-High"
+      Namespace: AWS/S3
+      MetricName: BucketSizeBytes
+      Statistic: Average
+      Period: 86400
+      Threshold: 5000000000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref S3BronzeBucketName
+        - Name: StorageType
+          Value: StandardStorage
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmSilverBucketSize:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${S3SilverBucketName}-BucketSizeBytes-High"
+      Namespace: AWS/S3
+      MetricName: BucketSizeBytes
+      Statistic: Average
+      Period: 86400
+      Threshold: 5000000000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref S3SilverBucketName
+        - Name: StorageType
+          Value: StandardStorage
+      AlarmActions: [!Ref AlertsTopic]
+
+  AlarmGoldBucketSize:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${S3GoldBucketName}-BucketSizeBytes-High"
+      Namespace: AWS/S3
+      MetricName: BucketSizeBytes
+      Statistic: Average
+      Period: 86400
+      Threshold: 5000000000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref S3GoldBucketName
+        - Name: StorageType
+          Value: StandardStorage
+      AlarmActions: [!Ref AlertsTopic]
+
+  # ---------------------------------------------------------------------
+  # Dashboard CloudWatch
+  # ---------------------------------------------------------------------
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: familia-connect-dashboard
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Utilização de CPU EC2",
+                "region": "${AWS::Region}",
+                "stat": "Average",
+                "period": 300,
+                "metrics": [
+                  [ "AWS/EC2", "CPUUtilization", "InstanceId", "${InstanceFrontA}" ],
+                  [ ".", ".", ".", "${InstanceFrontB}" ],
+                  [ ".", ".", ".", "${InstanceBackA}" ],
+                  [ ".", ".", ".", "${InstanceBackB}" ],
+                  [ ".", ".", ".", "${InstanceDb}" ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Network Front-end",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [ "AWS/EC2", "NetworkIn", "InstanceId", "${InstanceFrontA}" ],
+                  [ "AWS/EC2", "NetworkOut", "InstanceId", "${InstanceFrontA}" ],
+                  [ "AWS/EC2", "NetworkIn", "InstanceId", "${InstanceFrontB}" ],
+                  [ "AWS/EC2", "NetworkOut", "InstanceId", "${InstanceFrontB}" ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Load Balancer",
+                "region": "${AWS::Region}",
+                "stat": "Average",
+                "period": 300,
+                "metrics": [
+                  [ "AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", "${LbBack.LoadBalancerFullName}", "TargetGroup", "${TgBack.TargetGroupFullName}" ],
+                  [ ".", "HealthyHostCount", ".", ".", ".", "." ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Disco Banco de Dados",
+                "region": "${AWS::Region}",
+                "stat": "Average",
+                "period": 300,
+                "metrics": [
+                  [ "CWAgent", "disk_used_percent", "InstanceId", "${InstanceDb}", "path", "/", "fstype", "ext4" ]
+                ]
+              }
+            },
+            {
+              "type": "metric", "x": 0, "y": 12, "width": 24, "height": 6,
+              "properties": {
+                "title": "Buckets S3",
+                "region": "${AWS::Region}",
+                "stat": "Average",
+                "period": 86400,
+                "metrics": [
+                  [ "AWS/S3", "BucketSizeBytes", "BucketName", "${S3BronzeBucketName}", "StorageType", "StandardStorage" ],
+                  [ ".", ".", ".", "${S3SilverBucketName}", ".", "." ],
+                  [ ".", ".", ".", "${S3GoldBucketName}", ".", "." ]
+                ]
+              }
+            }
+          ]
+        }
+
+Outputs:
+  VpcId:
+    Value: !Ref Vpc
+
+  SubnetPublicAId:
+    Value: !Ref SubnetPublicA
+
+  SubnetPublicBId:
+    Value: !Ref SubnetPublicB
+
+  SubnetBackAId:
+    Value: !Ref SubnetBackA
+
+  SubnetBackBId:
+    Value: !Ref SubnetBackB
+
+  SubnetDbAId:
+    Value: !Ref SubnetDbA
+
+  KeyPairId:
+    Value: !GetAtt KeyPair.KeyPairId
+    Description: >-
+      ID do par de chaves. A chave privada fica salva no SSM Parameter Store
+      em /ec2/keypair/{KeyPairId}.
+
+  InstanceFrontAId:
+    Value: !Ref InstanceFrontA
+
+  InstanceFrontBId:
+    Value: !Ref InstanceFrontB
+
+  InstanceBackAId:
+    Value: !Ref InstanceBackA
+
+  InstanceBackBId:
+    Value: !Ref InstanceBackB
+
+  InstanceDbId:
+    Value: !Ref InstanceDb
+
+  LbFrontDNSName:
+    Value: !GetAtt LbFront.DNSName
+
+  LbBackDNSName:
+    Value: !GetAtt LbBack.DNSName
+
+  S3BronzeBucket:
+    Value: !Ref S3BronzeBucket
+
+  S3SilverBucket:
+    Value: !Ref S3SilverBucket
+
+  S3GoldBucket:
+    Value: !Ref S3GoldBucket
+
+  AlertsTopicArn:
+    Value: !Ref AlertsTopic
