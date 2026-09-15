@@ -1,2 +1,11 @@
 *.pem
 .env
+
+.terraform
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+infraestrutura_nuvem.png
