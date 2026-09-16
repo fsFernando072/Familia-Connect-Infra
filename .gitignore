@@ -7,6 +7,6 @@
 *.tfstate.*
 *.tfvars
 *.tfvars.json
-terraform.tvars
+terraform.tfvars
 
 infraestrutura_nuvem.png
