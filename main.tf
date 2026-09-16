@@ -169,7 +169,7 @@ module "lb_back" {
   security_group_ids  = [module.security.back_sg_id]
   target_port         = 8080
   listener_port       = 8080
-  health_check_path   = "/"
+  health_check_path   = "/api/actuator/health"
   target_instance_ids = {
     back_a = module.compute_back.instance_ids["back_a"]
     back_b = module.compute_back.instance_ids["back_b"]
@@ -178,7 +178,7 @@ module "lb_back" {
 
 # ---------- Estágio 3: front (usa o DNS do ALB interno do back) -------
 locals {
-  api_base_url = "http://${module.lb_back.dns_name}:8080/api"
+  api_base_url = "https://${module.lb_back.dns_name}:8080/api"
 
   front_user_data = templatefile("${path.module}/scripts/config_front.sh.tftpl", {
     api_base_url = local.api_base_url

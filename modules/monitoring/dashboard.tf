@@ -1,17 +1,41 @@
 locals {
   cpu_metrics = [
-    for k, id in var.cpu_instance_ids : ["AWS/EC2", "CPUUtilization", "InstanceId", id]
+    for k, id in var.cpu_instance_ids : [
+      "AWS/EC2",
+      "CPUUtilization",
+      "InstanceId",
+      id
+    ]
   ]
 
-  network_metrics = flatten([
-    for k, id in var.front_instance_ids : [
-      ["AWS/EC2", "NetworkIn", "InstanceId", id],
-      ["AWS/EC2", "NetworkOut", "InstanceId", id],
+  network_metrics = concat(
+    [
+      for k, id in var.front_instance_ids : [
+        "AWS/EC2",
+        "NetworkIn",
+        "InstanceId",
+        id
+      ]
+    ],
+    [
+      for k, id in var.front_instance_ids : [
+        "AWS/EC2",
+        "NetworkOut",
+        "InstanceId",
+        id
+      ]
     ]
-  ])
+  )
 
   bucket_metrics = [
-    for k, name in var.bucket_names : ["AWS/S3", "BucketSizeBytes", "BucketName", name, "StorageType", "StandardStorage"]
+    for k, name in var.bucket_names : [
+      "AWS/S3",
+      "BucketSizeBytes",
+      "BucketName",
+      name,
+      "StorageType",
+      "StandardStorage"
+    ]
   ]
 }
 

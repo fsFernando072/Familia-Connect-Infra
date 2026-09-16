@@ -7,4 +7,8 @@ resource "aws_s3_bucket" "this" {
     Name  = each.value
     Layer = each.key
   }
+
+  object_lock_enabled = false 
+
+  force_destroy = true 
 }

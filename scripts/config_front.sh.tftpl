@@ -34,7 +34,7 @@ sudo systemctl start docker
 
 echo "Configurando permissões do Docker..."
 sudo groupadd docker 2>/dev/null || true
-sudo usermod -aG docker $USER
+sudo usermod -aG docker ubuntu
 
 echo "Baixando imagem do Frontend do Docker Hub..."
 sudo docker pull fsfernando072/familia-connect-front:latest

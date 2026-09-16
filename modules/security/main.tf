@@ -91,7 +91,7 @@ resource "aws_security_group" "back" {
   }
 
   ingress {
-    description = "OCR 8000 (back <-> ocr, mesmo SG)"
+    description = "OCR 8000 (back para ocr, mesmo SG)"
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"

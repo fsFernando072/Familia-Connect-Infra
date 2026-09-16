@@ -1,17 +1,47 @@
 #!/bin/bash
-apt update -y
-apt install -y docker.io docker-compose
+echo "Atualizando pacotes..."
+sudo apt update -y
+sudo apt upgrade -y
 
-systemctl enable docker
-systemctl start docker
+echo "Instalando dependências..."
+sudo apt install -y ca-certificates curl gnupg lsb-release
 
-groupadd docker 2>/dev/null || true
-usermod -aG docker ubuntu
+echo "Configurando chave GPG do Docker..."
+sudo install -m 0755 -d /etc/apt/keyrings
 
-sleep 10
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-echo "Baixando imagem do OCR do Docker Hub..."
-docker pull fsfernando072/familia-connect-ocr:latest
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo "Adicionando repositório Docker..."
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/ubuntu \
+$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+echo "Atualizando repositórios..."
+sudo apt update -y
+
+echo "Instalando Docker..."
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+echo "Habilitando e iniciando Docker..."
+sudo systemctl enable docker
+sudo systemctl start docker
+
+echo "Configurando permissões do Docker..."
+sudo groupadd docker 2>/dev/null || true
+sudo usermod -aG docker ubuntu
+
+echo "Baixando imagem do OCR do Docker Hub (com até 5 tentativas)..."
+for i in {1..5}; do
+    sudo docker pull fsfernando072/familia-connect-ocr:latest && break || {
+        echo "Falha temporária no pull, tentativa $i de 5. Aguardando 10 segundos..."
+        sleep 10
+    }
+done
 
 echo "Subindo container OCR..."
 docker run -d \
