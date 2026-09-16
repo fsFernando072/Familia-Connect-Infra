@@ -1,4 +1,11 @@
 #!/bin/bash
+echo "Aguardando conexão com a internet e resolução de DNS..."
+until curl -s --connect-timeout 5 https://docker.io > /dev/null; do
+    echo "Rede ou DNS ainda não disponíveis. Aguardando 5 segundos..."
+    sleep 5
+done
+echo "Internet conectada com sucesso!"
+
 echo "Atualizando pacotes..."
 sudo apt update -y
 sudo apt upgrade -y
