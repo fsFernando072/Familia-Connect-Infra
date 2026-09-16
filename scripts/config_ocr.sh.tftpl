@@ -1,0 +1,24 @@
+#!/bin/bash
+apt update -y
+apt install -y docker.io docker-compose
+
+systemctl enable docker
+systemctl start docker
+
+groupadd docker 2>/dev/null || true
+usermod -aG docker ubuntu
+
+sleep 10
+
+echo "Baixando imagem do OCR do Docker Hub..."
+docker pull fsfernando072/familia-connect-ocr:latest
+
+echo "Subindo container OCR..."
+docker run -d \
+  --name familia-connect-ocr \
+  --restart always \
+  -p 8000:8000 \
+  -e OCR_SPACE_API_KEY="${ocr_space_api_key}" \
+  fsfernando072/familia-connect-ocr:latest
+
+echo "OCR subiu na porta 8000!"

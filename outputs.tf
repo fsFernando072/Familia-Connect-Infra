@@ -32,23 +32,46 @@ output "key_pair_ssm_parameter" {
 }
 
 output "instance_front_a_id" {
-  value = module.compute.instance_ids["front_a"]
+  value = module.compute_front.instance_ids["front_a"]
 }
 
 output "instance_front_b_id" {
-  value = module.compute.instance_ids["front_b"]
+  value = module.compute_front.instance_ids["front_b"]
 }
 
 output "instance_back_a_id" {
-  value = module.compute.instance_ids["back_a"]
+  value = module.compute_back.instance_ids["back_a"]
 }
 
 output "instance_back_b_id" {
-  value = module.compute.instance_ids["back_b"]
+  value = module.compute_back.instance_ids["back_b"]
 }
 
 output "instance_db_id" {
-  value = module.compute.instance_ids["db"]
+  value = module.compute_core.instance_ids["db"]
+}
+
+output "instance_ocr_a_id" {
+  value = module.compute_core.instance_ids["ocr_a"]
+}
+
+output "instance_ocr_b_id" {
+  value = module.compute_core.instance_ids["ocr_b"]
+}
+
+output "db_private_ip" {
+  description = "IP privado (dinâmico) da instância db, usado pelo backend em DB_URL"
+  value       = module.compute_core.private_ips["db"]
+}
+
+output "ocr_private_ip" {
+  description = "IP privado (dinâmico) da instância ocr_a, usado pelo backend em URL_OCR_SERVICE"
+  value       = module.compute_core.private_ips["ocr_a"]
+}
+
+output "api_base_url" {
+  description = "URL usada pelo front (API_BASE_URL) para falar com o ALB interno do back"
+  value       = local.api_base_url
 }
 
 output "lb_front_dns_name" {

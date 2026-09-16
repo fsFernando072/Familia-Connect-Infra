@@ -19,3 +19,22 @@ sudo groupadd docker
 sudo usermod -aG docker $USER
 
 newgrp docker
+
+echo "Baixando imagem do Backend do Docker Hub..."
+sudo docker pull fsfernando072/familia-connect-back:latest
+
+echo "Subindo container Backend..."
+sudo docker run -d \
+  --name familia-connect-back \
+  --restart always \
+  -p 8080:8080 \
+  -e DB_URL="${db_url}" \
+  -e DB_USERNAME="${db_username}" \
+  -e DB_PASSWORD="${db_password}" \
+  -e DB_TYPE_DDL="${db_type_ddl}" \
+  -e JWT_SECRET="${jwt_secret}" \
+  -e URL_OCR_SERVICE="${url_ocr_service}" \
+  -e APP_STORAGE_TYPE="${app_storage_type}" \
+  -e APP_STORAGE_S3_BUCKET="${app_storage_s3_bucket}" \
+  -e APP_STORAGE_S3_REGION="${app_storage_s3_region}" \
+  fsfernando072/familia-connect-back:latest

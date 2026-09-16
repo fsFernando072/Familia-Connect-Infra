@@ -86,3 +86,50 @@ variable "alert_emails" {
   ]
   description = "Lista de e-mails que receberão os alarmes via SNS."
 }
+
+variable "ocr_space_api_key" {
+  type        = string
+  description = "API key do OCR.space para as instâncias OCR"
+}
+
+# ---------------------------------------------------------------------
+# Banco de dados (consumidas pela instância db e pelo backend)
+# ---------------------------------------------------------------------
+variable "db_name" {
+  type        = string
+  default     = "familia_connect"
+  description = "Nome do schema/banco usado no DB_URL do backend"
+}
+
+variable "db_username" {
+  type        = string
+  description = "Usuário MySQL criado na instância db e usado pelo backend para se conectar (DB_USERNAME)"
+  sensitive   = true
+}
+
+variable "db_password" {
+  type        = string
+  description = "Senha MySQL criada na instância db e usada pelo backend para se conectar (DB_PASSWORD)"
+  sensitive   = true
+}
+
+variable "db_type_ddl" {
+  type        = string
+  default     = "update"
+  description = "Estratégia do Hibernate para o schema (create, create-drop, update, validate) — DB_TYPE_DDL do backend"
+}
+
+# ---------------------------------------------------------------------
+# Backend
+# ---------------------------------------------------------------------
+variable "jwt_secret" {
+  type        = string
+  description = "Chave secreta (mínimo 32 caracteres) usada pelo backend para assinar os tokens JWT (JWT_SECRET)"
+  sensitive   = true
+}
+
+variable "app_storage_type" {
+  type        = string
+  default     = "s3"
+  description = "Estratégia de armazenamento de arquivos do backend: local ou s3 (APP_STORAGE_TYPE)"
+}

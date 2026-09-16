@@ -1,0 +1,18 @@
+#!/bin/bash
+apt update -y
+apt install -y mysql-server
+
+cd /home/ubuntu
+git clone https://github.com/fsFernando072/Familia-Connect-BD.git
+
+systemctl enable mysql
+systemctl start mysql
+
+mysql < /home/ubuntu/Familia-Connect-BD/schema.sql
+
+# Criar usuário e conceder permissões para acesso remoto das instâncias back
+mysql -e "CREATE USER IF NOT EXISTS '${db_username}'@'%' IDENTIFIED BY '${db_password}';"
+mysql -e "GRANT ALL PRIVILEGES ON *.* TO '${db_username}'@'%' WITH GRANT OPTION;"
+mysql -e "FLUSH PRIVILEGES;"
+
+echo "MySQL configurado com usuário ${db_username} para acesso remoto"

@@ -36,13 +36,18 @@ echo "Configurando permissões do Docker..."
 sudo groupadd docker 2>/dev/null || true
 sudo usermod -aG docker $USER
 
-echo "Construindo imagem React..."
-sudo docker build -t react-front .
+echo "Baixando imagem do Frontend do Docker Hub..."
+sudo docker pull fsfernando072/familia-connect-front:latest
 
-echo "Subindo containers com Docker Compose..."
-sudo docker compose up -d --build
+echo "Subindo container Frontend..."
+sudo docker run -d \
+  --name familia-connect-front \
+  --restart always \
+  -p 80:80 \
+  -e API_BASE_URL="${api_base_url}" \
+  fsfernando072/familia-connect-front:latest
 
-echo "Criando página HTML..."
+echo "Criando página HTML de status..."
 sudo mkdir -p /var/www/html
 
 cat <<EOF | sudo tee /var/www/html/index.html > /dev/null

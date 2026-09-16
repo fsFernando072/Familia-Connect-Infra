@@ -90,6 +90,14 @@ resource "aws_security_group" "back" {
     security_groups = [aws_security_group.front.id]
   }
 
+  ingress {
+    description = "OCR 8000 (back <-> ocr, mesmo SG)"
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+    self        = true
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

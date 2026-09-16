@@ -1,0 +1,48 @@
+# Copie este arquivo para terraform.tfvars e ajuste os valores conforme
+# necessário. Todos os campos abaixo já têm default em variables.tf,
+# então este arquivo só precisa sobrescrever o que for diferente.
+
+aws_region = "us-east-1"
+
+vpc_name = "vpc-familia-connect"
+vpc_cidr = "10.0.0.0/20"
+
+public_subnet_a_cidr = "10.0.1.0/24"
+public_subnet_b_cidr = "10.0.2.0/24"
+back_subnet_a_cidr    = "10.0.3.0/24"
+back_subnet_b_cidr    = "10.0.4.0/24"
+db_subnet_a_cidr      = "10.0.5.0/24"
+
+ami_id        = "ami-0c7217cdde317cfec" # Ubuntu Server 22.04 LTS (x86)
+instance_type = "t3.micro"
+
+key_pair_name              = "myssh"
+iam_instance_profile_name  = "LabInstanceProfile"
+
+s3_bronze_bucket_name = "familia-connect-bronze-g02"
+s3_silver_bucket_name = "familia-connect-silver-g02"
+s3_gold_bucket_name   = "familia-connect-gold-g02"
+
+alert_emails = [
+  "anna.maegaki@sptech.school",
+  "fernando.fsilva@sptech.school",
+  "gabriel.castilho@sptech.school",
+  "miguel.ramos@sptech.school",
+  "joao.oliveiraneto@sptech.school",
+]
+
+# ---------------------------------------------------------------------
+# Segredos — NÃO têm default de propósito. Preencha aqui (arquivo já
+# ignorado pelo git via *.tfvars) ou via TF_VAR_nome_da_variavel.
+# ---------------------------------------------------------------------
+ocr_space_api_key = "SUA_CHAVE_OCR_SPACE_AQUI"
+
+db_username = "familia_connect_app"
+db_password = "TROQUE_ESTA_SENHA"
+db_name     = "familia_connect"
+db_type_ddl = "validate"
+
+jwt_secret = "TROQUE_POR_UMA_CHAVE_COM_NO_MINIMO_32_CARACTERES"
+
+app_storage_type = "s3" # ou "local"
+app_storage_s3_bucket = s3_gold_bucket_name
