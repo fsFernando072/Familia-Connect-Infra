@@ -37,7 +37,12 @@ sudo groupadd docker 2>/dev/null || true
 sudo usermod -aG docker ubuntu
 
 echo "Baixando imagem do Frontend do Docker Hub..."
-sudo docker pull fsfernando072/familia-connect-front:latest
+for i in {1..5}; do
+    sudo docker pull fsfernando072/familia-connect-front:latest && break || {
+        echo "Falha temporária no pull, tentativa $i de 5. Aguardando 10 segundos..."
+        sleep 10
+    }
+done
 
 echo "Subindo container Frontend..."
 sudo docker run -d \
