@@ -23,19 +23,29 @@ variable "public_subnet_b_cidr" {
   default = "10.0.2.0/24"
 }
 
-variable "back_subnet_a_cidr" {
+variable "front_subnet_a_cidr" {
   type    = string
   default = "10.0.3.0/24"
 }
 
-variable "back_subnet_b_cidr" {
+variable "front_subnet_b_cidr" {
   type    = string
   default = "10.0.4.0/24"
 }
 
-variable "db_subnet_a_cidr" {
+variable "back_subnet_a_cidr" {
   type    = string
   default = "10.0.5.0/24"
+}
+
+variable "back_subnet_b_cidr" {
+  type    = string
+  default = "10.0.6.0/24"
+}
+
+variable "db_subnet_a_cidr" {
+  type    = string
+  default = "10.0.7.0/24"
 }
 
 variable "ami_id" {

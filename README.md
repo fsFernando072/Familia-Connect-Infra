@@ -18,47 +18,72 @@ Este repositório contém a configuração Terraform que provisiona toda a infra
 
 ## 🏗️ Visão Geral da Arquitetura
 
-A infraestrutura é organizada em três camadas de sub-redes dentro de uma VPC (`10.0.0.0/20`) na região `us-east-1`:
+A infraestrutura segue o diagrama fornecido, usando duas Availability Zones dentro da VPC `10.0.0.0/20`:
 
-| Camada | Sub-rede | Zona | CIDR | Descrição |
-|---|---|---|---|---|
-| Pública | sub-rede-publica-A | us-east-1a | 10.0.1.0/24 | Front-end A + NAT Gateway |
-| Pública | sub-rede-publica-B | us-east-1b | 10.0.2.0/24 | Front-end B |
-| Privada (Back) | sub-rede-back-A | us-east-1a | 10.0.3.0/24 | Back-end A + OCR A |
-| Privada (Back) | sub-rede-back-B | us-east-1b | 10.0.4.0/24 | Back-end B + OCR B |
-| Privada (DB) | sub-rede-db-A | us-east-1a | 10.0.5.0/24 | Banco de Dados |
+| Camada | AZ A | AZ B | Função |
+|---|---|---|---|
+| Pública | `10.0.1.0/24` | `10.0.2.0/24` | ALB Front + NAT Gateway |
+| Front privada | `10.0.3.0/24` | `10.0.4.0/24` | Front-end A/B |
+| Back privada | `10.0.5.0/24` | `10.0.6.0/24` | Back-end A/B + OCR A/B |
+| Banco | `10.0.7.0/24` | — | Banco de dados |
+
+### Fluxo de comunicação
+
+```text
+Cliente
+  │
+  ▼
+ALB Front (público :80)
+  │
+  ▼
+Front A/B (privados :80)
+  │
+  ▼
+Nginx /api
+  │
+  ▼
+ALB Back (interno :8080)
+  │
+  ▼
+Back A/B (:8080)
+  │
+  ├──────────────► Banco de dados (:3306)
+  │
+  └──────────────► ALB OCR (interno :8000)
+                         │
+                         ▼
+                      OCR A/B
+```
+
+O Front não possui EIP. O navegador usa `API_BASE_URL=/api`; o Nginx do container encaminha as requisições `/api/*` para o ALB interno do Back. Assim, o ALB Back e as instâncias de Back/OCR permanecem privados.
+
+As sub-redes privadas usam **dois NAT Gateways**, um por AZ, para saída à internet.
 
 ### Roteamento
 
-**Public Route Table** — usada pelas sub-redes públicas:
-| Destination | Target |
-|---|---|
-| 10.0.0.0/20 | local |
-| 0.0.0.0/0 | igw-id |
+**Sub-redes públicas:** `0.0.0.0/0` → Internet Gateway.
 
-**Private Route Table** — usada pelas sub-redes privadas de back-end e banco:
-| Destination | Target |
-|---|---|
-| 10.0.0.0/20 | local |
-| 0.0.0.0/0 | natgw-id |
+**Sub-redes privadas da AZ A:** `0.0.0.0/0` → NAT Gateway A.
 
----
+**Sub-redes privadas da AZ B:** `0.0.0.0/0` → NAT Gateway B.
+
 
 ## 🛠️ Serviços AWS Utilizados
 
 | Serviço | Finalidade |
 |---|---|
 | **VPC** | Rede virtual isolada (`10.0.0.0/20`) |
-| **EC2 (t3.micro)** | 7 instâncias: 2 Front-end, 2 Back-end, 1 Banco de Dados, 2 OCR |
+| **EC2 (t3.micro)** | 7 instâncias: 2 Front managers, 2 Back workers, 1 Banco de Dados, 2 OCR workers |
+| **Docker Swarm** | Cluster com 2 managers (Front A/B) e 4 workers (Back A/B + OCR A/B) |
 | **Internet Gateway** | Acesso à internet para sub-redes públicas |
 | **NAT Gateway** | Saída à internet para sub-redes privadas |
-| **Application Load Balancer** | LB externo (Front) e interno (Back) |
-| **ACL de Rede** | Controle de tráfego por camada (pública, back, DB) |
-| **Security Groups** | Firewall por instância (front-sg, back-sg, db-sg) |
+| **Application Load Balancer** | ALB público do Front + ALBs internos do Back e OCR |
+| **ACL de Rede** | Controle de tráfego por camada (pública, front, back, DB) |
+| **Security Groups** | Firewall por ALB e instância (Front, Back, OCR e DB) |
 | **S3** | 3 buckets de armazenamento: Bronze, Silver e Gold |
 | **CloudWatch** | Alarmes de CPU, rede, disco, LB e S3 |
 | **SNS** | Notificações por e-mail dos alarmes CloudWatch |
-| **Elastic IP** | IPs fixos para instâncias Front-end públicas |
+| **Elastic IP** | 2 EIPs utilizados pelos NAT Gateways; os Fronts não possuem EIP |
 | **SSM Parameter Store** | Armazenamento seguro da chave SSH privada |
 
 ---
@@ -69,7 +94,7 @@ A infraestrutura é organizada em três camadas de sub-redes dentro de uma VPC (
 Familia-Connect-Infra/
 ├── main.tf                 # Arquivo principal - orquestra todos os módulos
 ├── variables.tf            # Variáveis de entrada
-├── terraform.tvars         # Valores das variáveis (commitado - atenção a segredos)
+├── terraform.tfvars.example # Exemplo dos valores das variáveis
 ├── outputs.tf              # Outputs da infraestrutura
 ├── providers.tf            # Configuração de providers (AWS, TLS)
 ├── scripts/
@@ -82,7 +107,7 @@ Familia-Connect-Infra/
 │   ├── keypair/            # TLS key pair + SSM parameter
 │   ├── security/           # Security groups + network ACLs
 │   ├── compute/            # EC2 instances (7) with user-data
-│   ├── loadbalancer/       # ALB (front: internet-facing, back: internal)
+│   ├── loadbalancer/       # ALB Front público + ALBs internos Back e OCR
 │   ├── storage/            # 3 S3 buckets (bronze, silver, gold)
 │   └── monitoring/         # CloudWatch alarms, dashboard, SNS topic
 ├── diagrama-infraestrutura.jpg
@@ -91,6 +116,30 @@ Familia-Connect-Infra/
 ```
 
 ---
+
+## 🐳 Docker Swarm
+
+O cluster é inicializado automaticamente pelas instâncias EC2:
+
+| Instância | Papel Swarm | Serviço | Hostname
+|---|---|---|---|
+| Front A | Manager | Front | `fc-front-a`
+| Front B | Manager | Front | `fc-front-b`
+| Back A | Worker | Back | `fc-back-a`
+| Back B | Worker | Back | `fc-back-b`
+| OCR A | Worker | OCR | `fc-ocr-a`
+| OCR B | Worker | OCR | `fc-ocr-b`
+
+O Front A executa `docker swarm init`. O token de manager e o token de worker são armazenados temporariamente no AWS Systems Manager Parameter Store para que os demais nós possam entrar no cluster sem deixar tokens fixos no Terraform. O `LabInstanceProfile` precisa permitir `ssm:GetParameter` e `ssm:PutParameter`.
+
+A stack é publicada pelo Front A somente depois que os quatro workers entram no cluster. Labels `fc_role=back` e `fc_role=ocr` garantem que cada serviço rode apenas nos workers correspondentes. Os serviços usam publicação `mode: host`, permitindo que os três ALBs apontem diretamente para os nós corretos.
+
+Portas internas necessárias para o Swarm:
+- TCP `2377`: gerenciamento do cluster
+- TCP/UDP `7946`: comunicação entre nós
+- UDP `4789`: rede overlay
+
+O usuário final continua acessando apenas o ALB Front público.
 
 ## 📊 Monitoramento
 
@@ -164,7 +213,7 @@ O Terraform irá provisionar, na ordem:
 5. Security Groups (front-sg, back-sg, db-sg)
 6. 7 Instâncias EC2 com user-data scripts apropriados
 7. Elastic IPs para instâncias Front-end públicas
-8. Load Balancers (externo para front na porta 80, interno para back na porta 8080)
+8. Load Balancers (Front público :80, Back interno :8080, OCR interno :8000)
 9. 3 Buckets S3 (Bronze, Silver, Gold)
 10. Tópico SNS + inscrições de e-mail
 11. Alarmes CloudWatch + Dashboard
@@ -189,11 +238,22 @@ terraform destroy -var-file=terraform.tvars
 
 | SG | Porta | Origem | Finalidade |
 |---|---|---|---|
-| front-sg | 22, 80, 443, 8080, 3333 | 0.0.0.0/0 | Acesso público ao Front |
-| back-sg | 22, 443 | 0.0.0.0/0 | Gerenciamento |
-| back-sg | 8080 | front-sg | Comunicação Front → Back |
-| back-sg | 8000 | front-sg | Comunicação Front → OCR |
-| db-sg | 22 | 0.0.0.0/0 | Gerenciamento |
+| front-sg | 80 | front-alb-sg | ALB Front → Front |
+| front-sg | 22 | 0.0.0.0/0 | Administração |
+| front-sg | 2377/TCP | VPC | Docker Swarm control plane |
+| front-sg | 7946/TCP+UDP | VPC | Comunicação entre nós Swarm |
+| front-sg | 4789/UDP | VPC | Rede overlay Swarm |
+| back-sg | 8080 | back-alb-sg | ALB Back → Back |
+| back-sg | 22 | 0.0.0.0/0 | Administração |
+| back-sg | 2377/TCP | VPC | Docker Swarm control plane |
+| back-sg | 7946/TCP+UDP | VPC | Comunicação entre nós Swarm |
+| back-sg | 4789/UDP | VPC | Rede overlay Swarm |
+| ocr-sg | 8000 | ocr-alb-sg | ALB OCR → OCR |
+| ocr-sg | 22 | 0.0.0.0/0 | Administração |
+| ocr-sg | 2377/TCP | VPC | Docker Swarm control plane |
+| ocr-sg | 7946/TCP+UDP | VPC | Comunicação entre nós Swarm |
+| ocr-sg | 4789/UDP | VPC | Rede overlay Swarm |
+| db-sg | 22 | 0.0.0.0/0 | Administração |
 | db-sg | 3306 | back-sg | Acesso MySQL do Back |
 
 ---

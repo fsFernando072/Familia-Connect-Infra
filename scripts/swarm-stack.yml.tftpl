@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  front:
+    image: fsfernando072/familia-connect-front:latest
+    environment:
+      API_BASE_URL: "/api"
+      BACKEND_URL: "http://__BACK_ALB_DNS__:8080"
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.role == manager
+        max_replicas_per_node: 1
+
+  back:
+    image: fsfernando072/familia-connect-back:latest
+    environment:
+      DB_URL: "jdbc:mysql://10.0.7.10:3306/${db_name}"
+      DB_USERNAME: "${db_username}"
+      DB_PASSWORD: "${db_password}"
+      DB_TYPE_DDL: "${db_type_ddl}"
+      JWT_SECRET: "${jwt_secret}"
+      URL_OCR_SERVICE: "http://__OCR_ALB_DNS__:8000"
+      APP_STORAGE_TYPE: "${app_storage_type}"
+      APP_STORAGE_S3_BUCKET: "${app_storage_s3_bucket}"
+      APP_STORAGE_S3_REGION: "${app_storage_s3_region}"
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: host
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.labels.fc_role == back
+        max_replicas_per_node: 1
+
+  ocr:
+    image: fsfernando072/familia-connect-ocr:latest
+    environment:
+      OCR_SPACE_API_KEY: "${ocr_space_api_key}"
+    ports:
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: host
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.labels.fc_role == ocr
+        max_replicas_per_node: 1

@@ -1,7 +1,7 @@
 # Familia-Connect-Infra — Agent Instructions
 
 ## Overview
-Terraform-based AWS infrastructure for Familia Connect app. Provisions VPC, EC2 (7 instances across 2 AZs), ALB (external + internal), S3 buckets, CloudWatch monitoring with SNS alerts.
+Terraform-based AWS infrastructure for Familia Connect app. Provisions VPC, EC2 (7 instances across 2 AZs), ALBs (external Front + internal Back/OCR), S3 buckets, CloudWatch monitoring with SNS alerts.
 
 ## Key Commands
 ```bash
@@ -33,9 +33,9 @@ terraform fmt -recursive
 ## Architecture Notes
 - **Region**: us-east-1 (hardcoded in `variables.tf:3`)
 - **VPC**: 10.0.0.0/20 with 5 subnets across 2 AZs (us-east-1a, us-east-1b)
-- **Instances**: 2 front (public, with EIP), 2 back (private), 1 DB (private), 2 OCR (private)
+- **Instances**: 2 front (private), 2 back (private), 1 DB (private), 2 OCR (private)
 - **User-data scripts**: `scripts/config_front.sh`, `scripts/config_back.sh`, `scripts/config_db.sh`, `scripts/config_ocr.sh.tftpl` — baked into EC2 launch via `file()` in `main.tf`
-- **Front instances**: Install Docker, build React app (`docker build -t react-front .`), run via docker-compose
+- **Front instances**: Install Docker and run the React image behind Nginx; `/api` is proxied to the internal Back ALB
 - **Back instances**: Install Docker only (app deployment not automated)
 - **OCR instances**: Install Docker, clone `fsFernando072/Familia-Connect-OCR`, build/run container on port 8000, requires `ocr_space_api_key` variable
 - **DB instance**: Installs MySQL, clones schema from `fsFernando072/Familia-Connect-BD` repo
@@ -47,7 +47,7 @@ modules/
 ├── keypair/      # TLS key pair + SSM parameter for private key
 ├── security/     # Security groups + network ACLs
 ├── compute/      # EC2 instances (7) with user-data
-├── loadbalancer/ # ALB (front: internet-facing, back: internal)
+├── loadbalancer/ # ALB Front público + ALBs internos Back/OCR
 ├── storage/      # 3 S3 buckets (bronze, silver, gold)
 └── monitoring/   # CloudWatch alarms, dashboard, SNS topic
 ```
@@ -71,3 +71,11 @@ modules/
 
 ## Outputs
 Key outputs: VPC/subnet IDs, instance IDs, ALB DNS names, S3 bucket names, SNS topic ARN.
+
+## Docker Swarm
+- `front_a` e `front_b` são os dois managers do cluster.
+- `back_a`, `back_b`, `ocr_a` e `ocr_b` são workers.
+- `fc_role=back` e `fc_role=ocr` são labels usados pelas restrições da stack.
+- O primeiro manager grava os tokens de join em `/familia-connect/swarm/manager-token` e `/familia-connect/swarm/worker-token` no SSM.
+- O Instance Profile das EC2 precisa ter `ssm:GetParameter` e `ssm:PutParameter`.
+- As portas TCP 2377/7946, UDP 7946 e UDP 4789 devem ser permitidas entre os nós do cluster.

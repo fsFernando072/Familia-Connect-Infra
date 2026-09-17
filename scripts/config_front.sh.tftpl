@@ -1,113 +1,131 @@
 #!/bin/bash
-echo "Aguardando conexão com a internet e resolução de DNS..."
-until curl -s --connect-timeout 5 https://docker.io > /dev/null; do
-    echo "Rede ou DNS ainda não disponíveis. Aguardando 5 segundos..."
-    sleep 5
-done
-echo "Internet conectada com sucesso!"
+set -e
 
-echo "Atualizando pacotes..."
-sudo apt update -y
-sudo apt upgrade -y
+MANAGER_IP="${manager_ip}"
+MANAGER_BOOTSTRAP="${manager_bootstrap}"
+SWARM_MANAGER_PARAMETER="${swarm_manager_parameter}"
+SWARM_WORKER_PARAMETER="${swarm_worker_parameter}"
+STACK_FILE="/opt/familia-connect/swarm-stack.yml"
 
-echo "Instalando dependências..."
-sudo apt install -y ca-certificates curl gnupg lsb-release
+hostnamectl set-hostname "${node_hostname}"
 
-echo "Configurando chave GPG do Docker..."
-sudo install -m 0755 -d /etc/apt/keyrings
+install_docker() {
+    echo "Aguardando conexão com a internet e resolução de DNS..."
+    until curl -s --connect-timeout 5 https://docker.io > /dev/null; do
+        echo "Rede ou DNS ainda não disponíveis. Aguardando 5 segundos..."
+        sleep 5
+    done
 
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    echo "Atualizando pacotes..."
+    apt-get update -y
+    apt-get install -y ca-certificates curl gnupg lsb-release
 
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    # Instala AWS CLI v2
+    if ! command -v aws >/dev/null 2>&1; then
+        curl -fsSL https://awscli.amazonaws.com/v2/install.sh | sudo bash -s -- --system
+    fi
+    install -m 0755 -d /etc/apt/keyrings
 
-echo "Adicionando repositório Docker..."
-echo \
-"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-https://download.docker.com/linux/ubuntu \
-$(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
 
-echo "Atualizando repositórios..."
-sudo apt update -y
+    echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-echo "Instalando Docker..."
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-echo "Habilitando e iniciando Docker..."
-sudo systemctl enable docker
-sudo systemctl start docker
+    systemctl enable docker
+    systemctl start docker
+}
 
-echo "Configurando permissões do Docker..."
-sudo groupadd docker 2>/dev/null || true
-sudo usermod -aG docker ubuntu
+install_docker
 
-echo "Baixando imagem do Frontend do Docker Hub..."
-for i in {1..5}; do
-    sudo docker pull fsfernando072/familia-connect-front:latest && break || {
-        echo "Falha temporária no pull, tentativa $i de 5. Aguardando 10 segundos..."
+if [ "$${MANAGER_BOOTSTRAP}" = "true" ]; then
+    echo "Inicializando o primeiro manager do Docker Swarm..."
+    if ! docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -q '^active$'; then
+        docker swarm init --advertise-addr "$${MANAGER_IP}"
+    fi
+
+    MANAGER_TOKEN="$(docker swarm join-token manager -q)"
+    WORKER_TOKEN="$(docker swarm join-token worker -q)"
+
+    echo "Publicando tokens do Swarm no SSM Parameter Store..."
+    until aws ssm put-parameter \
+        --name "$${SWARM_MANAGER_PARAMETER}" \
+        --type SecureString \
+        --value "$MANAGER_TOKEN" \
+        --overwrite; do
+        echo "Aguardando permissão/acesso ao SSM..."
         sleep 10
-    }
-done
+    done
 
-echo "Subindo container Frontend..."
-sudo docker run -d \
-  --name familia-connect-front \
-  --restart always \
-  -p 80:80 \
-  -e API_BASE_URL="${api_base_url}" \
-  fsfernando072/familia-connect-front:latest
+    until aws ssm put-parameter \
+        --name "$${SWARM_WORKER_PARAMETER}" \
+        --type SecureString \
+        --value "$WORKER_TOKEN" \
+        --overwrite; do
+        echo "Aguardando permissão/acesso ao SSM..."
+        sleep 10
+    done
 
-echo "Criando página HTML de status..."
-sudo mkdir -p /var/www/html
+    echo "Aguardando os ALBs internos serem criados pela infraestrutura..."
+    until aws elbv2 describe-load-balancers --names lb-back lb-ocr >/tmp/familia-connect-albs.json 2>/dev/null; do
+        echo "ALBs Back/OCR ainda não estão disponíveis. Aguardando 10 segundos..."
+        sleep 10
+    done
 
-cat <<EOF | sudo tee /var/www/html/index.html > /dev/null
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Máquina: $(hostname -f)</title>
+    BACK_ALB_DNS="$(aws elbv2 describe-load-balancers --names lb-back --query 'LoadBalancers[0].DNSName' --output text)"
+    OCR_ALB_DNS="$(aws elbv2 describe-load-balancers --names lb-ocr --query 'LoadBalancers[0].DNSName' --output text)"
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: rgb(73, 73, 155);
-            color: #fff;
-            text-align: center;
-            padding-top: 100px;
-            margin: 0;
-        }
+    mkdir -p /opt/familia-connect
+    cat > "$STACK_FILE" <<'STACK_EOF'
+${stack_yaml}
+STACK_EOF
 
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-        }
+    # Substitui somente os endpoints descobertos em runtime.
+    sed -i "s|__BACK_ALB_DNS__|$BACK_ALB_DNS|g; s|__OCR_ALB_DNS__|$OCR_ALB_DNS|g" "$STACK_FILE"
+    chmod 600 "$STACK_FILE"
 
-        p {
-            font-size: 1.2em;
-        }
+    echo "Aguardando os quatro workers entrarem no Swarm..."
+    for NODE in fc-back-a fc-back-b fc-ocr-a fc-ocr-b; do
+        until docker node inspect "$NODE" >/dev/null 2>&1; do
+            echo "Aguardando $NODE..."
+            sleep 10
+        done
+    done
 
-        .card {
-            background: rgba(0,0,0,0.3);
-            display: inline-block;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
-        }
-    </style>
-</head>
+    echo "Aplicando labels nos workers..."
+    docker node update --label-add fc_role=back fc-back-a
+    docker node update --label-add fc_role=back fc-back-b
+    docker node update --label-add fc_role=ocr fc-ocr-a
+    docker node update --label-add fc_role=ocr fc-ocr-b
 
-<body>
-    <div class="card">
-        <h1>Frontend React iniciado</h1>
+    echo "Publicando a stack Família Connect..."
+    docker stack deploy -c "$STACK_FILE" familia-connect
+else
+    echo "Entrando como segundo manager..."
+    until aws ssm get-parameter \
+        --name "$${SWARM_MANAGER_PARAMETER}" \
+        --with-decryption \
+        --query 'Parameter.Value' \
+        --output text > /tmp/swarm-manager-token; do
+        echo "Aguardando token do manager no SSM..."
+        sleep 10
+    done
 
-        <p><strong>Hostname:</strong> $(hostname -f)</p>
+    MANAGER_TOKEN="$(cat /tmp/swarm-manager-token)"
+    until docker swarm join \
+        --token "$MANAGER_TOKEN" \
+        "${manager_ip}:2377"; do
+        echo "Manager ainda não está disponível. Tentando novamente..."
+        sleep 10
+    done
+    rm -f /tmp/swarm-manager-token
+fi
 
-        <p><strong>IP:</strong> $(hostname -I | awk '{print $1}')</p>
-    </div>
-</body>
-</html>
-EOF
-
-echo "Subiu!"
+echo "Front manager ${node_hostname} configurado no Docker Swarm."

@@ -8,25 +8,13 @@ variable "vpc_cidr" {
   description = "CIDR da VPC"
 }
 
-variable "public_subnet_a_cidr" {
-  type = string
-}
-
-variable "public_subnet_b_cidr" {
-  type = string
-}
-
-variable "back_subnet_a_cidr" {
-  type = string
-}
-
-variable "back_subnet_b_cidr" {
-  type = string
-}
-
-variable "db_subnet_a_cidr" {
-  type = string
-}
+variable "public_subnet_a_cidr" { type = string }
+variable "public_subnet_b_cidr" { type = string }
+variable "front_subnet_a_cidr"  { type = string }
+variable "front_subnet_b_cidr"  { type = string }
+variable "back_subnet_a_cidr"   { type = string }
+variable "back_subnet_b_cidr"   { type = string }
+variable "db_subnet_a_cidr"     { type = string }
 
 variable "azs" {
   type        = list(string)
