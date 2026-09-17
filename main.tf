@@ -107,20 +107,20 @@ module "compute_db" {
 locals {
   front_a_user_data = templatefile("${path.module}/scripts/config_front.sh.tftpl", {
     manager_ip              = local.swarm_manager_ip
-    manager_bootstrap        = "true"
+    manager_bootstrap       = "true"
     swarm_manager_parameter = local.swarm_manager_parameter
     swarm_worker_parameter  = local.swarm_worker_parameter
     node_hostname           = "fc-front-a"
-    stack_yaml               = local.swarm_stack_template
+    stack_yaml              = local.swarm_stack_template
   })
 
   front_b_user_data = templatefile("${path.module}/scripts/config_front.sh.tftpl", {
     manager_ip              = local.swarm_manager_ip
-    manager_bootstrap        = "false"
+    manager_bootstrap       = "false"
     swarm_manager_parameter = local.swarm_manager_parameter
     swarm_worker_parameter  = local.swarm_worker_parameter
     node_hostname           = "fc-front-b"
-    stack_yaml               = local.swarm_stack_template
+    stack_yaml              = local.swarm_stack_template
   })
 
   front_instances = {
@@ -163,15 +163,15 @@ module "compute_front" {
 # ---------------------------------------------------------------------
 locals {
   back_user_data = templatefile("${path.module}/scripts/config_back.sh.tftpl", {
-    manager_ip              = local.swarm_manager_ip
-    swarm_worker_parameter  = local.swarm_worker_parameter
-    node_hostname           = "fc-back-a"
+    manager_ip             = local.swarm_manager_ip
+    swarm_worker_parameter = local.swarm_worker_parameter
+    node_hostname          = "fc-back-a"
   })
 
   back_user_data_b = templatefile("${path.module}/scripts/config_back.sh.tftpl", {
-    manager_ip              = local.swarm_manager_ip
-    swarm_worker_parameter  = local.swarm_worker_parameter
-    node_hostname           = "fc-back-b"
+    manager_ip             = local.swarm_manager_ip
+    swarm_worker_parameter = local.swarm_worker_parameter
+    node_hostname          = "fc-back-b"
   })
 }
 
@@ -308,15 +308,15 @@ module "lb_back" {
 # ---------------------------------------------------------------------
 locals {
   swarm_stack_template = templatefile("${path.module}/scripts/swarm-stack.yml.tftpl", {
-    db_name                = var.db_name
-    db_username            = var.db_username
-    db_password            = var.db_password
-    db_type_ddl             = var.db_type_ddl
-    jwt_secret              = var.jwt_secret
-    app_storage_type        = var.app_storage_type
-    app_storage_s3_bucket   = var.s3_gold_bucket_name
-    app_storage_s3_region   = var.aws_region
-    ocr_space_api_key       = var.ocr_space_api_key
+    db_name               = var.db_name
+    db_username           = var.db_username
+    db_password           = var.db_password
+    db_type_ddl           = var.db_type_ddl
+    jwt_secret            = var.jwt_secret
+    app_storage_type      = var.app_storage_type
+    app_storage_s3_bucket = var.s3_gold_bucket_name
+    app_storage_s3_region = var.aws_region
+    ocr_space_api_key     = var.ocr_space_api_key
   })
 }
 

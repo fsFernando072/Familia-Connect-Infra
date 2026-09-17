@@ -16,6 +16,6 @@ variable "instances" {
     user_data            = string
     name_tag             = string
     associate_eip        = bool
-    private_ip            = optional(string)
+    private_ip           = optional(string)
   }))
 }
