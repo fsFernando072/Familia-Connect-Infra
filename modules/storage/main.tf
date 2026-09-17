@@ -1,14 +1,16 @@
-resource "aws_s3_bucket" "this" {
+resource "awscc_s3_bucket" "this" {
   for_each = var.bucket_names
 
-  bucket = each.value
+  bucket_name = each.value
 
-  tags = {
-    Name  = each.value
-    Layer = each.key
-  }
-
-  object_lock_enabled = false
-
-  force_destroy = true
+  tags = [
+    {
+      key   = "Name"
+      value = each.value
+    },
+    {
+      key   = "Layer"
+      value = each.key
+    }
+  ]
 }

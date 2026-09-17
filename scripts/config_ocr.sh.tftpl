@@ -15,7 +15,7 @@ done
 
 echo "Instalando Docker e AWS CLI..."
 apt-get update -y
-apt-get install -y ca-certificates curl gnupg lsb-releas
+apt-get install -y ca-certificates curl gnupg lsb-release unzip
 # Instala AWS CLI v2
 if ! command -v aws >/dev/null 2>&1; then
     curl -fsSL https://awscli.amazonaws.com/v2/install.sh | sudo bash -s -- --system

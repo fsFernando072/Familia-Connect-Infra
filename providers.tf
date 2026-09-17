@@ -10,9 +10,16 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    awscc = {
+      source  = "hashicorp/awscc"
+      version = "~> 1.0"
+    }
   }
 }
 
 provider "aws" {
+  region = var.aws_region
+}
+provider "awscc" {
   region = var.aws_region
 }

@@ -44,9 +44,10 @@ locals {
 }
 
 resource "aws_ssm_parameter" "swarm_manager_token" {
-  name  = local.swarm_manager_parameter
-  type  = "SecureString"
-  value = "bootstrap-pending"
+  name      = local.swarm_manager_parameter
+  type      = "SecureString"
+  value     = "bootstrap-pending"
+  overwrite = true
 
   lifecycle {
     ignore_changes = [value]
