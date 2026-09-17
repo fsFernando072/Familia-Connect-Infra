@@ -450,7 +450,7 @@ resource "aws_network_acl_rule" "db_in_443_a" {
   egress          = false
   protocol        = "6"
   rule_action     = "allow"
-  cidr_block      = var.back_subnet_a_cidr
+  cidr_block      = var.public_subnet_a_cidr
   from_port       = 443
   to_port         = 443
 }
@@ -461,7 +461,7 @@ resource "aws_network_acl_rule" "db_in_443_b" {
   egress          = false
   protocol        = "6"
   rule_action     = "allow"
-  cidr_block      = var.back_subnet_b_cidr
+  cidr_block      = var.public_subnet_b_cidr
   from_port       = 443
   to_port         = 443
 }
