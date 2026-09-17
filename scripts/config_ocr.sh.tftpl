@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 MANAGER_IP="${manager_ip}"
 SWARM_WORKER_PARAMETER="${swarm_worker_parameter}"
@@ -8,17 +7,25 @@ NODE_HOSTNAME="${node_hostname}"
 hostnamectl set-hostname "$NODE_HOSTNAME"
 
 echo "Aguardando conexão com a internet e resolução de DNS..."
-until curl -s --connect-timeout 5 https://docker.io > /dev/null; do
+until curl -4 -s --connect-timeout 5 https://us-east-1.ec2.archive.ubuntu.com > /dev/null; do
     echo "Rede ou DNS ainda não disponíveis. Aguardando 5 segundos..."
     sleep 5
 done
 
 echo "Instalando Docker e AWS CLI..."
-apt-get update -y
-apt-get install -y ca-certificates curl gnupg lsb-release unzip
-# Instala AWS CLI v2
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y || true
+apt-get install -y ca-certificates curl gnupg lsb-release unzip || true
+
+# Instala AWS CLI v2 de forma simples e resiliente
 if ! command -v aws >/dev/null 2>&1; then
-    curl -fsSL https://awscli.amazonaws.com/v2/install.sh | sudo bash -s -- --system
+    until curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip && \
+          unzip -q /tmp/awscliv2.zip -d /tmp && \
+          sudo /tmp/aws/install; do
+        echo "Falha ao baixar a AWS CLI. Tentando novamente em 10 segundos..."
+        sleep 10
+    done
+    rm -rf /tmp/awscliv2.zip /tmp/aws
 fi
 
 install -m 0755 -d /etc/apt/keyrings
@@ -31,17 +38,19 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 systemctl enable docker
 systemctl start docker
 
+set -e
+
 echo "Aguardando token do Swarm no SSM..."
-until aws ssm get-parameter \
+until /usr/local/bin/aws ssm get-parameter \
     --name "$SWARM_WORKER_PARAMETER" \
     --with-decryption \
     --query 'Parameter.Value' \
-    --output text > /tmp/swarm-worker-token; do
-    echo "Token ainda não disponível. Aguardando 10 segundos..."
+    --output text > /tmp/swarm-worker-token && [ -s /tmp/swarm-worker-token ] && grep -q "SWMTKN" /tmp/swarm-worker-token; do
+    echo "Token ainda não disponível ou inválido. Aguardando 10 segundos..."
     sleep 10
 done
 
-WORKER_TOKEN="$(cat /tmp/swarm-worker-token)"
+WORKER_TOKEN="$(cat /tmp/swarm-worker-token | tr -d '[:space:]')"
 rm -f /tmp/swarm-worker-token
 
 until docker swarm join \

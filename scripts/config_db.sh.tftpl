@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "Aguardando conexão com a internet e resolução de DNS..."
-until curl -s --connect-timeout 5 https://github.com > /dev/null; do
+until curl -4 -s --connect-timeout 5 https://us-east-1.ec2.archive.ubuntu.com > /dev/null; do
     echo "Rede ou DNS ainda não disponíveis. Aguardando 5 segundos..."
     sleep 5
 done
@@ -9,8 +9,11 @@ echo "Internet conectada com sucesso!"
 apt update -y
 apt install -y mysql-server
 
-cd /home/ubuntu
-git clone https://github.com/fsFernando072/Familia-Connect-BD.git
+# ==========================================
+# CORREÇÃO: Permitir conexões externas no MySQL
+# ==========================================
+echo "Configurando o bind-address do MySQL para aceitar conexões remotas..."
+sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mysql/mysql.conf.d/mysqld.cnf
 
 systemctl enable mysql
 systemctl start mysql
