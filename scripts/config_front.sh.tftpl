@@ -81,12 +81,13 @@ if [ "$${MANAGER_BOOTSTRAP}" = "true" ]; then
         sleep 10
     done
 
-    echo "Aguardando os ALBs internos serem criados pela infraestrutura..."
-    until /usr/local/bin/aws elbv2 describe-load-balancers --names lb-back lb-ocr >/tmp/familia-connect-albs.json 2>/dev/null; do
-        echo "ALBs Back/OCR ainda não estão disponíveis. Aguardando 10 segundos..."
+    echo "Aguardando os ALBs (Front/Back/OCR) serem criados pela infraestrutura..."
+    until /usr/local/bin/aws elbv2 describe-load-balancers --names lb-front lb-back lb-ocr >/tmp/familia-connect-albs.json 2>/dev/null; do
+        echo "ALBs Front/Back/OCR ainda não estão disponíveis. Aguardando 10 segundos..."
         sleep 10
     done
 
+    FRONT_ALB_DNS="$(/usr/local/bin/aws elbv2 describe-load-balancers --names lb-front --query 'LoadBalancers[0].DNSName' --output text)"
     BACK_ALB_DNS="$(/usr/local/bin/aws elbv2 describe-load-balancers --names lb-back --query 'LoadBalancers[0].DNSName' --output text)"
     OCR_ALB_DNS="$(/usr/local/bin/aws elbv2 describe-load-balancers --names lb-ocr --query 'LoadBalancers[0].DNSName' --output text)"
 
@@ -96,7 +97,7 @@ ${stack_yaml}
 STACK_EOF
 
     # Substitui somente os endpoints descobertos em runtime.
-    sed -i "s|__BACK_ALB_DNS__|$BACK_ALB_DNS|g; s|__OCR_ALB_DNS__|$OCR_ALB_DNS|g" "$STACK_FILE"
+    sed -i "s|__FRONT_ALB_DNS__|$FRONT_ALB_DNS|g; s|__BACK_ALB_DNS__|$BACK_ALB_DNS|g; s|__OCR_ALB_DNS__|$OCR_ALB_DNS|g" "$STACK_FILE"
     chmod 600 "$STACK_FILE"
 
     echo "Aguardando os quatro workers entrarem no Swarm..."

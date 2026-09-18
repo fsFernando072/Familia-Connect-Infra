@@ -35,6 +35,7 @@ services:
       APP_STORAGE_TYPE: "${app_storage_type}"
       APP_STORAGE_S3_BUCKET: "${app_storage_s3_bucket}"
       APP_STORAGE_S3_REGION: "${app_storage_s3_region}"
+      CORS_ALLOWED_ORIGINS: "http://__FRONT_ALB_DNS__"
     ports:
       - target: 8080
         published: 8080

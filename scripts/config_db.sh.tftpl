@@ -7,7 +7,7 @@ done
 echo "Internet conectada com sucesso!"
 
 apt update -y
-apt install -y mysql-server
+apt install -y mysql-server git
 
 # ==========================================
 # CORREÇÃO: Permitir conexões externas no MySQL
@@ -16,7 +16,17 @@ echo "Configurando o bind-address do MySQL para aceitar conexões remotas..."
 sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mysql/mysql.conf.d/mysqld.cnf
 
 systemctl enable mysql
-systemctl start mysql
+# O apt install já inicia o mysql com o bind-address antigo; "restart" garante
+# que a config nova (0.0.0.0) seja realmente aplicada.
+systemctl restart mysql
+
+echo "Clonando repositório com o schema do banco..."
+rm -rf /home/ubuntu/Familia-Connect-BD
+until git clone https://github.com/fsfernando072/Familia-Connect-BD.git /home/ubuntu/Familia-Connect-BD; do
+    echo "Falha ao clonar o repositório do schema. Tentando novamente em 10 segundos..."
+    rm -rf /home/ubuntu/Familia-Connect-BD
+    sleep 10
+done
 
 mysql < /home/ubuntu/Familia-Connect-BD/schema.sql
 
