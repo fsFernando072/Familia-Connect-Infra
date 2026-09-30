@@ -275,6 +275,8 @@ locals {
     app_storage_s3_bucket = var.s3_gold_bucket_name
     app_storage_s3_region = var.aws_region
     ocr_space_api_key     = var.ocr_space_api_key
+    rabbitmq_username     = var.rabbitmq_username
+    rabbitmq_password     = var.rabbitmq_password
   })
 }
 

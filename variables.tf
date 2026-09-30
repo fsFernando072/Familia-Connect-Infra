@@ -149,3 +149,19 @@ variable "app_storage_s3_bucket" {
   default     = "familia-connect-gold-g02"
   description = "Local de armazenamento de arquivos do backend: local ou s3 (APP_STORAGE_S3_BUCKET)"
 }
+
+# ---------------------------------------------------------------------
+# RabbitMQ (sobe no swarm junto com o back)
+# ---------------------------------------------------------------------
+variable "rabbitmq_username" {
+  type        = string
+  default     = "admin"
+  description = "Usuário padrão do RabbitMQ (RABBITMQ_DEFAULT_USER) e do Spring (SPRING_RABBITMQ_USERNAME)"
+  sensitive   = true
+}
+
+variable "rabbitmq_password" {
+  type        = string
+  description = "Senha padrão do RabbitMQ (RABBITMQ_DEFAULT_PASS) e do Spring (SPRING_RABBITMQ_PASSWORD)"
+  sensitive   = true
+}

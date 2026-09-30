@@ -115,6 +115,22 @@ resource "aws_security_group" "back" {
   }
 
   ingress {
+    description = "RabbitMQ AMQP (Spring) - somente dentro da VPC"
+    from_port   = 5672
+    to_port     = 5672
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+  ingress {
+    description = "RabbitMQ painel de administracao - somente dentro da VPC"
+    from_port   = 15672
+    to_port     = 15672
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+  ingress {
     description = "Docker Swarm control plane"
     from_port   = 2377
     to_port     = 2377

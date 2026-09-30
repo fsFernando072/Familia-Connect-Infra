@@ -39,6 +39,10 @@ services:
       APP_STORAGE_S3_BUCKET: "${app_storage_s3_bucket}"
       APP_STORAGE_S3_REGION: "${app_storage_s3_region}"
       CORS_ALLOWED_ORIGINS: "http://__FRONT_ALB_DNS__"
+      SPRING_RABBITMQ_HOST: "rabbitmq"
+      SPRING_RABBITMQ_PORT: "5672"
+      SPRING_RABBITMQ_USERNAME: "${rabbitmq_username}"
+      SPRING_RABBITMQ_PASSWORD: "${rabbitmq_password}"
     networks:
       - fc-overlay
     deploy:
@@ -53,6 +57,41 @@ services:
         constraints:
           - node.labels.fc_role == back
         max_replicas_per_node: 1
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "${rabbitmq_username}"
+      RABBITMQ_DEFAULT_PASS: "${rabbitmq_password}"
+    ports:
+      - target: 5672
+        published: 5672
+        protocol: tcp
+        mode: host
+      - target: 15672
+        published: 15672
+        protocol: tcp
+        mode: host
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - fc-overlay
+    deploy:
+      endpoint_mode: vip
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.labels.fc_role == back
+          - node.hostname == fc-back-a
 
   ocr:
     image: fsfernando072/familia-connect-ocr:latest
@@ -72,6 +111,9 @@ services:
         constraints:
           - node.labels.fc_role == ocr
         max_replicas_per_node: 1
+
+volumes:
+  rabbitmq_data:
 
 networks:
   fc-overlay:
