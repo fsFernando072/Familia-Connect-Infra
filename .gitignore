@@ -9,5 +9,6 @@
 *.tfvars.json
 terraform.tfvars
 AGENTS.md
+.ssh
 
 infraestrutura_nuvem.png
