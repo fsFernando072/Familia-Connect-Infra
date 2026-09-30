@@ -208,6 +208,16 @@ resource "aws_network_acl_rule" "public_in_443" {
   from_port      = 443
   to_port        = 443
 }
+resource "aws_network_acl_rule" "public_in_22" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 105
+  egress         = false
+  protocol       = "6"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 22
+  to_port        = 22
+}
 resource "aws_network_acl_rule" "public_in_ephemeral" {
   network_acl_id = aws_network_acl.public.id
   rule_number    = 120
@@ -258,6 +268,16 @@ resource "aws_network_acl_rule" "front_in_8080" {
   cidr_block     = "0.0.0.0/0"
   from_port      = 8080
   to_port        = 8080
+}
+resource "aws_network_acl_rule" "front_in_22" {
+  network_acl_id = aws_network_acl.front.id
+  rule_number    = 135
+  egress         = false
+  protocol       = "6"
+  rule_action    = "allow"
+  cidr_block     = var.vpc_cidr
+  from_port      = 22
+  to_port        = 22
 }
 resource "aws_network_acl_rule" "front_in_swarm_2377" {
   network_acl_id = aws_network_acl.front.id

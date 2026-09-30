@@ -231,6 +231,33 @@ resource "aws_security_group" "ocr" {
 }
 
 # ---------------------------------------------------------------------
+# Bastion — instância pública; só SSH (22). Porta de entrada para os
+# Fronts privados (ProxyJump), onde roda o SFTP restrito.
+# ---------------------------------------------------------------------
+resource "aws_security_group" "bastion" {
+  name        = "bastion-sg"
+  description = "Bastion host (SSH 22)"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "SSH dos clientes autorizados"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.bastion_allowed_cidrs
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "bastion-sg" }
+}
+
+# ---------------------------------------------------------------------
 # Banco — recebe MySQL somente do Backend
 # ---------------------------------------------------------------------
 resource "aws_security_group" "db" {

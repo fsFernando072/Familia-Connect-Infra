@@ -51,3 +51,11 @@ app_storage_s3_bucket = "familia-connect-gold-g02"
 
 rabbitmq_username = "admin"
 rabbitmq_password = "TROQUE_ESTA_SENHA"
+
+# ---------------------------------------------------------------------
+# SFTP restrito nos Fronts (acesso via bastion) — cole o conteúdo de
+# ~/.ssh/familiasftp.pub (chave PÚBLICA)
+# ---------------------------------------------------------------------
+sftp_username         = "familia_sftp"
+sftp_public_key       = "ssh-ed25519 AAAA...COLE_AQUI... familia-connect-sftp-key"
+bastion_allowed_cidrs = ["0.0.0.0/0"] # restrinja ao IP do cliente quando possível

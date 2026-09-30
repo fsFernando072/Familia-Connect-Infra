@@ -111,3 +111,21 @@ output "swarm_worker_token_parameter" {
   description = "SSM Parameter Store com o token de worker do Swarm"
   value       = local.swarm_worker_parameter
 }
+
+output "instance_bastion_id" {
+  value = module.compute_bastion.instance_ids["bastion"]
+}
+
+output "bastion_public_ip" {
+  description = "IP elástico do bastion (ProxyJump para o SFTP dos Fronts)"
+  value       = module.compute_bastion.public_ips["bastion"]
+}
+
+output "sftp_username" {
+  value = var.sftp_username
+}
+
+output "sftp_target_ip" {
+  description = "IP privado do Front A (manager do Swarm) onde o SFTP restrito recebe os arquivos"
+  value       = local.swarm_manager_ip
+}

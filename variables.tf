@@ -165,3 +165,23 @@ variable "rabbitmq_password" {
   description = "Senha padrão do RabbitMQ (RABBITMQ_DEFAULT_PASS) e do Spring (SPRING_RABBITMQ_PASSWORD)"
   sensitive   = true
 }
+
+# ---------------------------------------------------------------------
+# SFTP restrito (roteiro-sftp-linux)
+# ---------------------------------------------------------------------
+variable "sftp_username" {
+  type        = string
+  default     = "familia_sftp"
+  description = "Usuário Linux que acessa somente SFTP (sem shell), preso em /srv/familia-connect nos Fronts (managers do Swarm)"
+}
+
+variable "sftp_public_key" {
+  type        = string
+  description = "Conteúdo da chave PÚBLICA do cliente (ex: ~/.ssh/familiasftp.pub) autorizada no SFTP dos Fronts"
+}
+
+variable "bastion_allowed_cidrs" {
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+  description = "CIDRs autorizados a acessar o bastion (SSH, porta 22). Restrinja ao IP do cliente quando possível."
+}

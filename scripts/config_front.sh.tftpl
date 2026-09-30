@@ -8,6 +8,71 @@ STACK_FILE="/opt/familia-connect/swarm-stack.yml"
 
 hostnamectl set-hostname "${node_hostname}"
 
+# ---------------------------------------------------------------------
+# SFTP restrito (roteiro-sftp-linux): usuário só com SFTP, sem shell,
+# preso em ChrootDirectory. Recebe arquivos (ex.: stack/compose do Swarm)
+# direto neste manager. Falha aqui NÃO impede o bootstrap do Swarm.
+# ---------------------------------------------------------------------
+configure_sftp() {
+    local SFTP_USER="${sftp_username}"
+    local SFTP_ROOT="${sftp_root}"
+    local SFTP_DATA="$SFTP_ROOT/data"
+    local SFTP_KEYS_DIR="/etc/ssh/keys/$SFTP_USER"
+    local SFTP_PUBLIC_KEY="${sftp_public_key}"
+
+    # 1. Raiz do chroot: dono root, sem escrita para o usuário
+    mkdir -p "$SFTP_ROOT" || return 1
+    chown root:root "$SFTP_ROOT"
+    chmod 755 "$SFTP_ROOT"
+
+    # Subpasta gravável (vista como /data dentro da sessão SFTP)
+    mkdir -p "$SFTP_DATA"
+
+    # 2. Usuário sem shell interativo, dono da subpasta de dados
+    if ! id "$SFTP_USER" >/dev/null 2>&1; then
+        useradd -m -s /bin/false "$SFTP_USER" || return 1
+    fi
+    chown -R "$SFTP_USER":"$SFTP_USER" "$SFTP_DATA"
+
+    # 3. Chave pública (o par é gerado no cliente; aqui entra só a pública)
+    mkdir -p "$SFTP_KEYS_DIR"
+    printf '%s\n' "$SFTP_PUBLIC_KEY" > "$SFTP_KEYS_DIR/authorized_keys"
+    chown -R "$SFTP_USER":"$SFTP_USER" "$SFTP_KEYS_DIR"
+    chmod 755 /etc/ssh/keys
+    chmod 700 "$SFTP_KEYS_DIR"
+    chmod 600 "$SFTP_KEYS_DIR/authorized_keys"
+
+    # 4. Bloco Match no FIM do sshd_config (idempotente)
+    if ! grep -q "# BEGIN familia-connect-sftp" /etc/ssh/sshd_config; then
+        cat >> /etc/ssh/sshd_config <<SSHD_EOF
+
+# BEGIN familia-connect-sftp
+Match User $SFTP_USER
+    ForceCommand internal-sftp
+    ChrootDirectory $SFTP_ROOT
+    PermitTTY no
+    X11Forwarding no
+    AllowTcpForwarding no
+    AuthorizedKeysFile $SFTP_KEYS_DIR/authorized_keys
+    PasswordAuthentication no
+    PubkeyAuthentication yes
+# END familia-connect-sftp
+SSHD_EOF
+    fi
+
+    # 5. Valida a sintaxe ANTES de reiniciar; se falhar, desfaz o bloco e
+    #    mantém o sshd atual no ar
+    if ! sshd -t; then
+        sed -i '/# BEGIN familia-connect-sftp/,/# END familia-connect-sftp/d' /etc/ssh/sshd_config
+        echo "sshd_config inválido; bloco SFTP removido." >&2
+        return 1
+    fi
+    systemctl restart ssh
+    echo "SFTP restrito configurado: usuário $SFTP_USER em $SFTP_ROOT (/data)."
+}
+
+configure_sftp || echo "Falha ao configurar o SFTP; seguindo com o Swarm."
+
 install_docker() {
     echo "Aguardando conexão com a internet e resolução de DNS..."
     until curl -4 -s --connect-timeout 5 https://us-east-1.ec2.archive.ubuntu.com > /dev/null; do

@@ -22,7 +22,7 @@ A infraestrutura segue o diagrama fornecido, usando duas Availability Zones dent
 
 | Camada | AZ A | AZ B | Função |
 |---|---|---|---|
-| Pública | `10.0.1.0/24` | `10.0.2.0/24` | ALB Front (único ALB) + NAT Gateway |
+| Pública | `10.0.1.0/24` | `10.0.2.0/24` | ALB Front (único ALB) + NAT Gateway + Bastion (AZ A, `10.0.1.10`) |
 | Front privada | `10.0.3.0/24` | `10.0.4.0/24` | Front-end A/B |
 | Back privada | `10.0.5.0/24` | `10.0.6.0/24` | Back-end A/B + OCR A/B |
 | Banco | `10.0.7.0/24` | — | Banco de dados |
@@ -70,7 +70,7 @@ As sub-redes privadas usam **dois NAT Gateways**, um por AZ, para saída à inte
 | Serviço | Finalidade |
 |---|---|
 | **VPC** | Rede virtual isolada (`10.0.0.0/20`) |
-| **EC2 (t3.micro)** | 7 instâncias: 2 Front managers, 2 Back workers, 1 Banco de Dados, 2 OCR workers |
+| **EC2 (t3.micro)** | 8 instâncias: 2 Front managers, 2 Back workers, 1 Banco de Dados, 2 OCR workers, 1 Bastion (fora do Swarm) |
 | **Docker Swarm** | Cluster com 2 managers (Front A/B) e 4 workers (Back A/B + OCR A/B) |
 | **Internet Gateway** | Acesso à internet para sub-redes públicas |
 | **NAT Gateway** | Saída à internet para sub-redes privadas |
@@ -80,7 +80,7 @@ As sub-redes privadas usam **dois NAT Gateways**, um por AZ, para saída à inte
 | **S3** | 3 buckets de armazenamento: Bronze, Silver e Gold |
 | **CloudWatch** | Alarmes de CPU, rede, disco, LB e S3 |
 | **SNS** | Notificações por e-mail dos alarmes CloudWatch |
-| **Elastic IP** | 2 EIPs utilizados pelos NAT Gateways; os Fronts não possuem EIP |
+| **Elastic IP** | 2 EIPs dos NAT Gateways + 1 EIP do Bastion; os Fronts não possuem EIP |
 | **SSM Parameter Store** | Armazenamento seguro da chave SSH privada |
 
 ---
@@ -139,6 +139,64 @@ Portas internas necessárias para o Swarm:
 O **RabbitMQ** (`rabbitmq:4-management`) é um serviço da stack, com 1 réplica fixada no nó `fc-back-a` (volume `rabbitmq_data` local), na mesma rede overlay. O Back o acessa por `rabbitmq:5672` (`SPRING_RABBITMQ_*`). As portas `5672` (AMQP) e `15672` (painel) são publicadas em `mode: host` nesse nó e liberadas no `back-sg` apenas para a VPC; o painel, por estar em subnet privada, é acessado via túnel SSH (`ssh -L 15672:localhost:15672 ...`). Usuário/senha vêm das variáveis `rabbitmq_username` e `rabbitmq_password`.
 
 O usuário final continua acessando apenas o ALB Front público. Como o tráfego entre os serviços passa pela overlay (VXLAN), as portas de aplicação `8080`/`8000` não precisam mais estar abertas nos Security Groups.
+
+## 📤 SFTP restrito (nos Fronts, via Bastion)
+
+Implementa o roteiro *SFTP Restrito* **nos managers do Swarm** (`fc-front-a` / `fc-front-b`), para enviar arquivos (ex.: o stack/compose) direto para quem orquestra o cluster. O bloco está em `scripts/config_front.sh.tftpl` (função `configure_sftp`; se falhar, o bootstrap do Swarm segue normalmente).
+
+Como os Fronts ficam em sub-rede privada, a entrada é pelo **Bastion** (`ec2-bastion`, sub-rede pública A, EIP): o cliente salta por ele com `ProxyJump` e chega ao SFTP do Front A (`10.0.3.10`). A NACL do Front libera a porta 22 vinda da VPC.
+
+```text
+Cliente ──SSH:22──► Bastion (EIP) ──SSH:22 (VPC)──► Front A 10.0.3.10 ── internal-sftp ── /srv/familia-connect
+```
+
+| Item | Valor |
+|---|---|
+| Usuário SFTP | `familia_sftp` (variável `sftp_username`) |
+| Raiz chroot (dono `root`, 755) | `/srv/familia-connect` |
+| Pasta gravável | `/srv/familia-connect/data` (vista como `/data` no SFTP) |
+| Chaves autorizadas | `/etc/ssh/keys/familia_sftp/authorized_keys` |
+| Regras no `sshd_config` | `ForceCommand internal-sftp`, `ChrootDirectory`, sem TTY/forward, só chave pública (validado com `sshd -t` antes do restart) |
+
+**Uso**
+
+```bash
+# 1. Chave do SFTP (cole o .pub em sftp_public_key no terraform.tfvars ANTES do apply)
+ssh-keygen -t ed25519 -f ~/.ssh/familiasftp -C "familia-connect-sftp-key"
+cat ~/.ssh/familiasftp.pub
+
+# 2. Chave administrativa do projeto (para o salto pelo bastion)
+aws ssm get-parameter --name <key_pair_ssm_parameter> --with-decryption \
+  --query Parameter.Value --output text > ~/.ssh/myssh.pem && chmod 600 ~/.ssh/myssh.pem
+
+# 3. Conexão (ProxyJump pelo bastion)
+sftp -i ~/.ssh/familiasftp -o ProxyJump=ubuntu@<bastion_public_ip> familia_sftp@10.0.3.10
+sftp> cd data
+sftp> put swarm-stack.yml
+```
+
+Se o `ssh` não achar a chave do bastion, use `ssh-add ~/.ssh/myssh.pem` ou o atalho abaixo.
+
+**Atalho em `~/.ssh/config`** (depois `chmod 600 ~/.ssh/config` e `sftp familia_sftp`):
+
+```text
+Host fc-bastion
+    HostName <bastion_public_ip>
+    User ubuntu
+    IdentityFile ~/.ssh/myssh.pem
+    IdentitiesOnly yes
+
+Host familia_sftp
+    HostName 10.0.3.10
+    User familia_sftp
+    IdentityFile ~/.ssh/familiasftp
+    IdentitiesOnly yes
+    ProxyJump fc-bastion
+```
+
+Teste de bloqueio de shell: `ssh familia_sftp` deve responder *"This service allows sftp connections only."*
+
+> ⚠️ Os arquivos ficam no disco do Front. Trocar `sftp_public_key` (ou qualquer conteúdo do `user_data` do Front) recria a instância — inclusive o manager do Swarm.
 
 ## 📊 Monitoramento
 
@@ -250,6 +308,7 @@ terraform destroy -var-file=terraform.tvars
 | ocr-sg | 2377/TCP | VPC | Docker Swarm control plane |
 | ocr-sg | 7946/TCP+UDP | VPC | Comunicação entre nós Swarm |
 | ocr-sg | 4789/UDP | VPC | Rede overlay Swarm |
+| bastion-sg | 22 | `bastion_allowed_cidrs` (padrão 0.0.0.0/0) | SSH/SFTP (ProxyJump) dos clientes |
 | db-sg | 22 | 0.0.0.0/0 | Administração |
 | db-sg | 3306 | back-sg | Acesso MySQL do Back |
 

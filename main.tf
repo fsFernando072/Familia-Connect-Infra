@@ -26,8 +26,9 @@ module "keypair" {
 }
 
 module "security" {
-  source = "./modules/security"
-  vpc_id = module.network.vpc_id
+  source                = "./modules/security"
+  vpc_id                = module.network.vpc_id
+  bastion_allowed_cidrs = var.bastion_allowed_cidrs
 }
 
 # ---------------------------------------------------------------------
@@ -41,6 +42,7 @@ locals {
   swarm_manager_parameter = "/familia-connect/swarm/manager-token"
   swarm_worker_parameter  = "/familia-connect/swarm/worker-token"
   swarm_manager_ip        = "10.0.3.10"
+  sftp_root               = "/srv/familia-connect"
 }
 
 resource "aws_ssm_parameter" "swarm_manager_token" {
@@ -112,6 +114,9 @@ locals {
     swarm_manager_parameter = local.swarm_manager_parameter
     swarm_worker_parameter  = local.swarm_worker_parameter
     node_hostname           = "fc-front-a"
+    sftp_username           = var.sftp_username
+    sftp_root               = local.sftp_root
+    sftp_public_key         = trimspace(var.sftp_public_key)
     stack_yaml              = local.swarm_stack_template
   })
 
@@ -121,6 +126,9 @@ locals {
     swarm_manager_parameter = local.swarm_manager_parameter
     swarm_worker_parameter  = local.swarm_worker_parameter
     node_hostname           = "fc-front-b"
+    sftp_username           = var.sftp_username
+    sftp_root               = local.sftp_root
+    sftp_public_key         = trimspace(var.sftp_public_key)
     stack_yaml              = local.swarm_stack_template
   })
 
@@ -262,6 +270,30 @@ module "compute_ocr" {
 }
 
 # ---------------------------------------------------------------------
+# Bastion host — única porta de entrada SSH/SFTP vinda da internet.
+# Os Fronts (managers do Swarm) são privados; o SFTP restrito roda neles
+# (ver config_front.sh.tftpl) e é alcançado por ProxyJump via bastion.
+# ---------------------------------------------------------------------
+module "compute_bastion" {
+  source = "./modules/compute"
+
+  instances = {
+    bastion = {
+      ami_id               = var.ami_id
+      instance_type        = var.instance_type
+      key_name             = module.keypair.key_name
+      subnet_id            = module.network.public_subnet_a_id
+      private_ip           = "10.0.1.10"
+      security_group_ids   = [module.security.bastion_sg_id]
+      iam_instance_profile = var.iam_instance_profile_name
+      user_data            = "#!/bin/bash\nhostnamectl set-hostname fc-bastion\n"
+      name_tag             = "ec2-bastion"
+      associate_eip        = true
+    }
+  }
+}
+
+# ---------------------------------------------------------------------
 # Stack do Swarm. O primeiro manager grava este arquivo e faz deploy.
 # ---------------------------------------------------------------------
 locals {
@@ -331,6 +363,7 @@ module "monitoring" {
     ocr_a   = module.compute_ocr.instance_ids["ocr_a"]
     ocr_b   = module.compute_ocr.instance_ids["ocr_b"]
     db      = module.compute_db.instance_ids["db"]
+    bastion = module.compute_bastion.instance_ids["bastion"]
   }
 
   front_instance_ids = {
