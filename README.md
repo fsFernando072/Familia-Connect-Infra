@@ -22,7 +22,7 @@ A infraestrutura segue o diagrama fornecido, usando duas Availability Zones dent
 
 | Camada | AZ A | AZ B | Função |
 |---|---|---|---|
-| Pública | `10.0.1.0/24` | `10.0.2.0/24` | ALB Front + NAT Gateway |
+| Pública | `10.0.1.0/24` | `10.0.2.0/24` | ALB Front (único ALB) + NAT Gateway |
 | Front privada | `10.0.3.0/24` | `10.0.4.0/24` | Front-end A/B |
 | Back privada | `10.0.5.0/24` | `10.0.6.0/24` | Back-end A/B + OCR A/B |
 | Banco | `10.0.7.0/24` | — | Banco de dados |
@@ -40,22 +40,19 @@ Front A/B (privados :80)
   │
   ▼
 Nginx /api
-  │
-  ▼
-ALB Back (interno :8080)
-  │
+  │   (rede overlay Swarm — serviço "back", VIP + IPVS)
   ▼
 Back A/B (:8080)
   │
   ├──────────────► Banco de dados (:3306)
   │
-  └──────────────► ALB OCR (interno :8000)
+  └──────────────► (rede overlay Swarm — serviço "ocr", VIP + IPVS)
                          │
                          ▼
-                      OCR A/B
+                      OCR A/B (:8000)
 ```
 
-O Front não possui EIP. O navegador usa `API_BASE_URL=/api`; o Nginx do container encaminha as requisições `/api/*` para o ALB interno do Back. Assim, o ALB Back e as instâncias de Back/OCR permanecem privados.
+O Front não possui EIP. O navegador usa `API_BASE_URL=/api`; o Nginx do container encaminha as requisições `/api/*` para o serviço `back` (`http://back:8080`) pela rede overlay do Swarm. O Back acessa o OCR do mesmo modo (`http://ocr:8000`). Não há ALBs para Back/OCR: o balanceamento é feito pelo próprio Docker (VIP + IPVS), e as instâncias de Back/OCR permanecem privadas.
 
 As sub-redes privadas usam **dois NAT Gateways**, um por AZ, para saída à internet.
 
@@ -77,7 +74,7 @@ As sub-redes privadas usam **dois NAT Gateways**, um por AZ, para saída à inte
 | **Docker Swarm** | Cluster com 2 managers (Front A/B) e 4 workers (Back A/B + OCR A/B) |
 | **Internet Gateway** | Acesso à internet para sub-redes públicas |
 | **NAT Gateway** | Saída à internet para sub-redes privadas |
-| **Application Load Balancer** | ALB público do Front + ALBs internos do Back e OCR |
+| **Application Load Balancer** | Apenas o ALB público do Front |
 | **ACL de Rede** | Controle de tráfego por camada (pública, front, back, DB) |
 | **Security Groups** | Firewall por ALB e instância (Front, Back, OCR e DB) |
 | **S3** | 3 buckets de armazenamento: Bronze, Silver e Gold |
@@ -107,7 +104,7 @@ Familia-Connect-Infra/
 │   ├── keypair/            # TLS key pair + SSM parameter
 │   ├── security/           # Security groups + network ACLs
 │   ├── compute/            # EC2 instances (7) with user-data
-│   ├── loadbalancer/       # ALB Front público + ALBs internos Back e OCR
+│   ├── loadbalancer/       # ALB Front público
 │   ├── storage/            # 3 S3 buckets (bronze, silver, gold)
 │   └── monitoring/         # CloudWatch alarms, dashboard, SNS topic
 ├── diagrama-infraestrutura.jpg
@@ -132,14 +129,14 @@ O cluster é inicializado automaticamente pelas instâncias EC2:
 
 O Front A executa `docker swarm init`. O token de manager e o token de worker são armazenados temporariamente no AWS Systems Manager Parameter Store para que os demais nós possam entrar no cluster sem deixar tokens fixos no Terraform. O `LabInstanceProfile` precisa permitir `ssm:GetParameter` e `ssm:PutParameter`.
 
-A stack é publicada pelo Front A somente depois que os quatro workers entram no cluster. Labels `fc_role=back` e `fc_role=ocr` garantem que cada serviço rode apenas nos workers correspondentes. Os serviços usam publicação `mode: host`, permitindo que os três ALBs apontem diretamente para os nós corretos.
+A stack é publicada pelo Front A somente depois que os quatro workers entram no cluster. Labels `fc_role=back` e `fc_role=ocr` garantem que cada serviço rode apenas nos workers correspondentes. Somente o Front publica porta (`80`, `mode: host`), pois o ALB Front aponta diretamente para os managers. Back e OCR **não publicam portas**: os três serviços participam da rede overlay `fc-overlay` (definida na stack) e se encontram pelo nome do serviço (`back`, `ocr`). O Docker resolve o nome para um IP virtual (`endpoint_mode: vip`) e distribui as conexões entre as réplicas saudáveis.
 
 Portas internas necessárias para o Swarm:
 - TCP `2377`: gerenciamento do cluster
 - TCP/UDP `7946`: comunicação entre nós
 - UDP `4789`: rede overlay
 
-O usuário final continua acessando apenas o ALB Front público.
+O usuário final continua acessando apenas o ALB Front público. Como o tráfego entre os serviços passa pela overlay (VXLAN), as portas de aplicação `8080`/`8000` não precisam mais estar abertas nos Security Groups.
 
 ## 📊 Monitoramento
 
@@ -147,8 +144,6 @@ O CloudWatch Dashboard `familia-connect-dashboard` monitora em tempo real:
 
 - **CPU de todas as instâncias EC2** (alarme em > 80% por 2 períodos de 5 min)
 - **Tráfego de rede (NetworkIn/Out)** das instâncias Front-end (alarme em > 100 MB)
-- **Tempo de resposta** do Load Balancer do Back-end (alarme em > 2s)
-- **Hosts saudáveis** no Target Group do Back-end (alarme se ≤ 1)
 - **Uso de disco** da instância de Banco de Dados (alarme em > 85%)
 - **Tamanho dos buckets S3** Bronze, Silver e Gold (alarme em > 5 GB)
 
@@ -213,7 +208,7 @@ O Terraform irá provisionar, na ordem:
 5. Security Groups (front-sg, back-sg, db-sg)
 6. 7 Instâncias EC2 com user-data scripts apropriados
 7. Elastic IPs para instâncias Front-end públicas
-8. Load Balancers (Front público :80, Back interno :8080, OCR interno :8000)
+8. Load Balancer (Front público :80)
 9. 3 Buckets S3 (Bronze, Silver, Gold)
 10. Tópico SNS + inscrições de e-mail
 11. Alarmes CloudWatch + Dashboard
@@ -243,12 +238,10 @@ terraform destroy -var-file=terraform.tvars
 | front-sg | 2377/TCP | VPC | Docker Swarm control plane |
 | front-sg | 7946/TCP+UDP | VPC | Comunicação entre nós Swarm |
 | front-sg | 4789/UDP | VPC | Rede overlay Swarm |
-| back-sg | 8080 | back-alb-sg | ALB Back → Back |
 | back-sg | 22 | 0.0.0.0/0 | Administração |
 | back-sg | 2377/TCP | VPC | Docker Swarm control plane |
 | back-sg | 7946/TCP+UDP | VPC | Comunicação entre nós Swarm |
 | back-sg | 4789/UDP | VPC | Rede overlay Swarm |
-| ocr-sg | 8000 | ocr-alb-sg | ALB OCR → OCR |
 | ocr-sg | 22 | 0.0.0.0/0 | Administração |
 | ocr-sg | 2377/TCP | VPC | Docker Swarm control plane |
 | ocr-sg | 7946/TCP+UDP | VPC | Comunicação entre nós Swarm |

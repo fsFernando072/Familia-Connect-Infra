@@ -30,14 +30,6 @@ variable "db_instance_id" {
   type = string
 }
 
-variable "lb_back_full_name" {
-  type = string
-}
-
-variable "tg_back_full_name" {
-  type = string
-}
-
 variable "bucket_names" {
   description = "Mapa nome_logico (bronze/silver/gold) => nome do bucket"
   type        = map(string)

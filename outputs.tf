@@ -73,20 +73,12 @@ output "db_private_ip" {
 }
 
 output "api_base_url" {
-  description = "URL usada pelo front (API_BASE_URL) para falar com o ALB interno do back"
+  description = "URL usada pelo front (API_BASE_URL); o Nginx repassa /api para o serviço back pela rede overlay do Swarm"
   value       = local.api_base_url
 }
 
 output "lb_front_dns_name" {
   value = module.lb_front.dns_name
-}
-
-output "lb_back_dns_name" {
-  value = module.lb_back.dns_name
-}
-
-output "lb_ocr_dns_name" {
-  value = module.lb_ocr.dns_name
 }
 
 output "s3_bronze_bucket" {

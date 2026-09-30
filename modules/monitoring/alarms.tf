@@ -62,45 +62,6 @@ resource "aws_cloudwatch_metric_alarm" "network_out_front" {
 }
 
 # ---------------------------------------------------------------------
-# Alarmes CloudWatch — Load Balancer BACK
-# ---------------------------------------------------------------------
-resource "aws_cloudwatch_metric_alarm" "lb_back_latency" {
-  alarm_name          = "lb-back-TargetResponseTime-High"
-  namespace           = "AWS/ApplicationELB"
-  metric_name         = "TargetResponseTime"
-  statistic           = "Average"
-  period              = 300
-  threshold           = 2
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-
-  dimensions = {
-    LoadBalancer = var.lb_back_full_name
-    TargetGroup  = var.tg_back_full_name
-  }
-
-  alarm_actions = [aws_sns_topic.alerts.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "tg_back_healthy_hosts" {
-  alarm_name          = "tg-back-HealthyHostCount-Low"
-  namespace           = "AWS/ApplicationELB"
-  metric_name         = "HealthyHostCount"
-  statistic           = "Average"
-  period              = 300
-  threshold           = 1
-  comparison_operator = "LessThanOrEqualToThreshold"
-  evaluation_periods  = 1
-
-  dimensions = {
-    LoadBalancer = var.lb_back_full_name
-    TargetGroup  = var.tg_back_full_name
-  }
-
-  alarm_actions = [aws_sns_topic.alerts.arn]
-}
-
-# ---------------------------------------------------------------------
 # Alarme CloudWatch — Disco do banco (requer CloudWatch Agent na VM)
 # ---------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "db_disk_used" {

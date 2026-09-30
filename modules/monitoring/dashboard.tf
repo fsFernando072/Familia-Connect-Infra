@@ -79,23 +79,6 @@ resource "aws_cloudwatch_dashboard" "this" {
         width  = 12
         height = 6
         properties = {
-          title  = "Load Balancer"
-          region = var.region
-          stat   = "Average"
-          period = 300
-          metrics = [
-            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", var.lb_back_full_name, "TargetGroup", var.tg_back_full_name],
-            ["AWS/ApplicationELB", "HealthyHostCount", "LoadBalancer", var.lb_back_full_name, "TargetGroup", var.tg_back_full_name],
-          ]
-        }
-      },
-      {
-        type   = "metric"
-        x      = 12
-        y      = 6
-        width  = 12
-        height = 6
-        properties = {
           title  = "Disco Banco de Dados"
           region = var.region
           stat   = "Average"
@@ -107,9 +90,9 @@ resource "aws_cloudwatch_dashboard" "this" {
       },
       {
         type   = "metric"
-        x      = 0
-        y      = 12
-        width  = 24
+        x      = 12
+        y      = 6
+        width  = 12
         height = 6
         properties = {
           title   = "Buckets S3"

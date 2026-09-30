@@ -262,49 +262,6 @@ module "compute_ocr" {
 }
 
 # ---------------------------------------------------------------------
-# ALB OCR interno — Back -> ALB OCR -> workers OCR
-# O Swarm publica 8000 no host dos dois workers.
-# ---------------------------------------------------------------------
-module "lb_ocr" {
-  source = "./modules/loadbalancer"
-
-  name               = "ocr"
-  internal           = true
-  vpc_id             = module.network.vpc_id
-  subnet_ids         = [module.network.back_subnet_a_id, module.network.back_subnet_b_id]
-  security_group_ids = [module.security.ocr_alb_sg_id]
-  target_port        = 8000
-  listener_port      = 8000
-  health_check_path  = "/docs"
-
-  target_instance_ids = {
-    ocr_a = module.compute_ocr.instance_ids["ocr_a"]
-    ocr_b = module.compute_ocr.instance_ids["ocr_b"]
-  }
-}
-
-# ---------------------------------------------------------------------
-# ALB Back interno — Front -> ALB Back -> workers Back
-# ---------------------------------------------------------------------
-module "lb_back" {
-  source = "./modules/loadbalancer"
-
-  name               = "back"
-  internal           = true
-  vpc_id             = module.network.vpc_id
-  subnet_ids         = [module.network.front_subnet_a_id, module.network.front_subnet_b_id]
-  security_group_ids = [module.security.back_alb_sg_id]
-  target_port        = 8080
-  listener_port      = 8080
-  health_check_path  = "/api/actuator/health"
-
-  target_instance_ids = {
-    back_a = module.compute_back.instance_ids["back_a"]
-    back_b = module.compute_back.instance_ids["back_b"]
-  }
-}
-
-# ---------------------------------------------------------------------
 # Stack do Swarm. O primeiro manager grava este arquivo e faz deploy.
 # ---------------------------------------------------------------------
 locals {
@@ -380,9 +337,6 @@ module "monitoring" {
   }
 
   db_instance_id = module.compute_db.instance_ids["db"]
-
-  lb_back_full_name = module.lb_back.lb_full_name
-  tg_back_full_name = module.lb_back.tg_full_name
 
   bucket_names = {
     bronze = var.s3_bronze_bucket_name
