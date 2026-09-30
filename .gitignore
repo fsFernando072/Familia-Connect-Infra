@@ -8,5 +8,6 @@
 *.tfvars
 *.tfvars.json
 terraform.tfvars
+AGENTS.md
 
 infraestrutura_nuvem.png

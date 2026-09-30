@@ -143,3 +143,9 @@ variable "app_storage_type" {
   default     = "s3"
   description = "Estratégia de armazenamento de arquivos do backend: local ou s3 (APP_STORAGE_TYPE)"
 }
+
+variable "app_storage_s3_bucket" {
+  type        = string
+  default     = "familia-connect-gold-g02"
+  description = "Local de armazenamento de arquivos do backend: local ou s3 (APP_STORAGE_S3_BUCKET)"
+}

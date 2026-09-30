@@ -47,4 +47,4 @@ db_type_ddl = "validate"
 jwt_secret = "TROQUE_POR_UMA_CHAVE_COM_NO_MINIMO_32_CARACTERES"
 
 app_storage_type = "s3" # ou "local"
-app_storage_s3_bucket = s3_gold_bucket_name
+app_storage_s3_bucket = "familia-connect-gold-g02"
