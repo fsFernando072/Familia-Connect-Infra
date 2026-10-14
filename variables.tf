@@ -179,9 +179,3 @@ variable "sftp_public_key" {
   type        = string
   description = "Conteúdo da chave PÚBLICA do cliente (ex: ~/.ssh/familiasftp.pub) autorizada no SFTP dos Fronts"
 }
-
-variable "bastion_allowed_cidrs" {
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-  description = "CIDRs autorizados a acessar o bastion (SSH, porta 22). Restrinja ao IP do cliente quando possível."
-}

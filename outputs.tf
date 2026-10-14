@@ -112,15 +112,6 @@ output "swarm_worker_token_parameter" {
   value       = local.swarm_worker_parameter
 }
 
-output "instance_bastion_id" {
-  value = module.compute_bastion.instance_ids["bastion"]
-}
-
-output "bastion_public_ip" {
-  description = "IP elástico do bastion (ProxyJump para o SFTP dos Fronts)"
-  value       = module.compute_bastion.public_ips["bastion"]
-}
-
 output "sftp_username" {
   value = var.sftp_username
 }
