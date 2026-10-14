@@ -32,7 +32,7 @@ resource "aws_lambda_function" "ingestao" {
     variables = {
       BUCKET_NAME = var.bucket_name
       ANO_INICIAL = tostring(var.ano_inicial)
-      ANO_FINAL   = tostring(var.ano_final)
+      ANO_FINAL = var.ano_final == null ? "" : tostring(var.ano_final)
     }
   }
 
@@ -54,4 +54,24 @@ resource "aws_lambda_invocation" "primeira_carga" {
     ano_final   = var.ano_final
     bases       = ["base1", "base2"]
   })
+}
+
+resource "aws_cloudwatch_event_rule" "mensal" {
+  name                = "${var.function_name}-mensal"
+  schedule_expression = "cron(0 6 1 * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "mensal" {
+  rule      = aws_cloudwatch_event_rule.mensal.name
+  target_id = "lambda"
+  arn       = aws_lambda_function.ingestao.arn
+  input     = jsonencode({ somente_ano_atual = true })
+}
+
+resource "aws_lambda_permission" "eventbridge" {
+  statement_id  = "AllowEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ingestao.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.mensal.arn
 }

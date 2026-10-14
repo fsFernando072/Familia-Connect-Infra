@@ -21,12 +21,12 @@ variable "bucket_name" {
 
 variable "ano_inicial" {
   type    = number
-  default = 2007
+  default = 2020
 }
 
 variable "ano_final" {
   type    = number
-  default = 2020
+  default = null
 }
 
 variable "executar_no_apply" {

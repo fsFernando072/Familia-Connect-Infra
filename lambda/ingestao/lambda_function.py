@@ -19,6 +19,7 @@ import os
 import urllib.request
 from html.parser import HTMLParser
 from urllib.parse import urljoin
+from datetime import datetime
 
 import boto3
 
@@ -29,7 +30,7 @@ s3 = boto3.client("s3")
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME", "")
 ANO_INICIAL = int(os.environ.get("ANO_INICIAL", "2020"))
-ANO_FINAL = int(os.environ.get("ANO_FINAL", "2026"))
+ANO_FINAL = int(os.environ.get("ANO_FINAL") or datetime.now().year)
 
 PAGINA_SP_URL = os.environ.get(
     "PAGINA_SP_URL",
@@ -221,8 +222,12 @@ def lambda_handler(event, context):
         raise ValueError("Defina a variável de ambiente BUCKET_NAME")
 
     event = event or {}
-    ano_ini = int(event.get("ano_inicial", ANO_INICIAL))
-    ano_fim = int(event.get("ano_final", ANO_FINAL))
+    ano_ini = int(event.get("ano_inicial") or ANO_INICIAL)
+    ano_fim = int(event.get("ano_final") or ANO_FINAL)
+
+    if event.get("somente_ano_atual"):
+        ano_ini = ano_fim = datetime.now().year
+
     bases = event.get("bases", ["base1", "base2"])
     anos = list(range(ano_ini, ano_fim + 1))
 

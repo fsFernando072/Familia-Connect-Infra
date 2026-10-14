@@ -11,12 +11,12 @@ variable "lambda_role_name" {
 
 variable "ingestao_ano_inicial" {
   type    = number
-  default = 2007
+  default = 2020
 }
 
 variable "ingestao_ano_final" {
   type    = number
-  default = 2020
+  default = 2026
 }
 
 variable "ingestao_executar_no_apply" {
