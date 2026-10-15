@@ -64,6 +64,12 @@ variable "key_pair_name" {
   default = "myssh"
 }
 
+variable "back_instance_type" {
+  type        = string
+  default     = "t3.medium"
+  description = "Tipo de instância das EC2 do Back (rodam o microserviço)."
+}
+
 variable "iam_instance_profile_name" {
   type        = string
   default     = "LabInstanceProfile"

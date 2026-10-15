@@ -1,0 +1,57 @@
+[SERVICE]
+    flush        1
+    daemon       Off
+    log_level    info
+    parsers_file parsers-familia.conf
+
+# Log de erros do MySQL (startup, warnings, crashes, conexões negadas)
+[INPUT]
+    name             tail
+    tag              mysql.error
+    path             /var/log/mysql/error.log
+    parser           mysql_error
+    read_from_head   On
+    db               /var/lib/fluent-bit/tail-mysql-error.db
+    Mem_Buf_Limit    5MB
+    Refresh_Interval 5
+
+# Slow query log (consultas acima de long_query_time)
+[INPUT]
+    name             tail
+    tag              mysql.slow
+    path             /var/log/mysql/mysql-slow.log
+    read_from_head   On
+    db               /var/lib/fluent-bit/tail-mysql-slow.db
+    Mem_Buf_Limit    5MB
+    Refresh_Interval 5
+
+[FILTER]
+    name    record_modifier
+    match   mysql.*
+    record  hostname ${node_hostname}
+
+[OUTPUT]
+    name             s3
+    match            mysql.error
+    region           ${aws_region}
+    bucket           ${bronze_bucket}
+    total_file_size  10M
+    upload_timeout   1m
+    format           json
+    json_date_key    date
+    json_date_format iso8601
+    store_dir        /var/lib/fluent-bit/s3/mysql-error
+    s3_key_format    /logs/mysql/${node_hostname}/error/%Y/%m/%d/mysql_error_%H-%M-%S-$UUID.json
+
+[OUTPUT]
+    name             s3
+    match            mysql.slow
+    region           ${aws_region}
+    bucket           ${bronze_bucket}
+    total_file_size  10M
+    upload_timeout   1m
+    format           json
+    json_date_key    date
+    json_date_format iso8601
+    store_dir        /var/lib/fluent-bit/s3/mysql-slow
+    s3_key_format    /logs/mysql/${node_hostname}/slow/%Y/%m/%d/mysql_slow_%H-%M-%S-$UUID.json

@@ -74,17 +74,52 @@ resource "aws_ssm_parameter" "swarm_worker_token" {
 }
 
 # ---------------------------------------------------------------------
+# Fluent Bit — logs em JSON para o bucket bronze (S3)
+# Instâncias com Docker (front/back/ocr): logs + eventos dos containers.
+# Instância de banco: error log + slow query log do MySQL.
+# ---------------------------------------------------------------------
+locals {
+  fluentbit_parsers_conf = file("${path.module}/scripts/fluent-bit-parsers.conf")
+
+  fluentbit_docker_hosts = ["fc-front-a", "fc-front-b", "fc-back-a", "fc-back-b", "fc-ocr-a", "fc-ocr-b"]
+
+  fluentbit_setup_docker = {
+    for host in local.fluentbit_docker_hosts : host => templatefile("${path.module}/scripts/fluentbit_setup.sh.tftpl", {
+      bronze_bucket = var.s3_bronze_bucket_name
+      parsers_conf  = local.fluentbit_parsers_conf
+      fluentbit_conf = templatefile("${path.module}/scripts/fluent-bit-docker.conf.tftpl", {
+        aws_region    = var.aws_region
+        bronze_bucket = var.s3_bronze_bucket_name
+        node_hostname = host
+      })
+    })
+  }
+
+  fluentbit_setup_db = templatefile("${path.module}/scripts/fluentbit_setup.sh.tftpl", {
+    bronze_bucket = var.s3_bronze_bucket_name
+    parsers_conf  = local.fluentbit_parsers_conf
+    fluentbit_conf = templatefile("${path.module}/scripts/fluent-bit-mysql.conf.tftpl", {
+      aws_region    = var.aws_region
+      bronze_bucket = var.s3_bronze_bucket_name
+      node_hostname = "fc-db"
+    })
+  })
+}
+
+# ---------------------------------------------------------------------
 # Banco de dados
 # ---------------------------------------------------------------------
 locals {
   db_user_data = templatefile("${path.module}/scripts/config_db.sh.tftpl", {
-    db_username = var.db_username
-    db_password = var.db_password
+    db_username     = var.db_username
+    db_password     = var.db_password
+    fluentbit_setup = local.fluentbit_setup_db
   })
 }
 
 module "compute_db" {
-  source = "./modules/compute"
+  source     = "./modules/compute"
+  depends_on = [module.storage]
 
   instances = {
     db = {
@@ -113,6 +148,7 @@ locals {
     swarm_manager_parameter = local.swarm_manager_parameter
     swarm_worker_parameter  = local.swarm_worker_parameter
     node_hostname           = "fc-front-a"
+    fluentbit_setup         = local.fluentbit_setup_docker["fc-front-a"]
     sftp_username           = var.sftp_username
     sftp_root               = local.sftp_root
     sftp_public_key         = trimspace(var.sftp_public_key)
@@ -125,6 +161,7 @@ locals {
     swarm_manager_parameter = local.swarm_manager_parameter
     swarm_worker_parameter  = local.swarm_worker_parameter
     node_hostname           = "fc-front-b"
+    fluentbit_setup         = local.fluentbit_setup_docker["fc-front-b"]
     sftp_username           = var.sftp_username
     sftp_root               = local.sftp_root
     sftp_public_key         = trimspace(var.sftp_public_key)
@@ -163,7 +200,7 @@ locals {
 module "compute_front" {
   source     = "./modules/compute"
   instances  = local.front_instances
-  depends_on = [aws_ssm_parameter.swarm_manager_token, aws_ssm_parameter.swarm_worker_token]
+  depends_on = [aws_ssm_parameter.swarm_manager_token, aws_ssm_parameter.swarm_worker_token, module.storage]
 }
 
 # ---------------------------------------------------------------------
@@ -174,12 +211,14 @@ locals {
     manager_ip             = local.swarm_manager_ip
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-back-a"
+    fluentbit_setup        = local.fluentbit_setup_docker["fc-back-a"]
   })
 
   back_user_data_b = templatefile("${path.module}/scripts/config_back.sh.tftpl", {
     manager_ip             = local.swarm_manager_ip
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-back-b"
+    fluentbit_setup        = local.fluentbit_setup_docker["fc-back-b"]
   })
 }
 
@@ -189,7 +228,7 @@ module "compute_back" {
   instances = {
     back_a = {
       ami_id               = var.ami_id
-      instance_type        = var.instance_type
+      instance_type        = var.back_instance_type
       key_name             = module.keypair.key_name
       subnet_id            = module.network.back_subnet_a_id
       private_ip           = "10.0.5.10"
@@ -202,7 +241,7 @@ module "compute_back" {
 
     back_b = {
       ami_id               = var.ami_id
-      instance_type        = var.instance_type
+      instance_type        = var.back_instance_type
       key_name             = module.keypair.key_name
       subnet_id            = module.network.back_subnet_b_id
       private_ip           = "10.0.6.10"
@@ -225,12 +264,14 @@ locals {
     manager_ip             = local.swarm_manager_ip
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-ocr-a"
+    fluentbit_setup        = local.fluentbit_setup_docker["fc-ocr-a"]
   })
 
   ocr_user_data_b = templatefile("${path.module}/scripts/config_ocr.sh.tftpl", {
     manager_ip             = local.swarm_manager_ip
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-ocr-b"
+    fluentbit_setup        = local.fluentbit_setup_docker["fc-ocr-b"]
   })
 }
 

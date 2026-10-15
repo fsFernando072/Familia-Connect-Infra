@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------
+# Fluent Bit: envia logs em JSON para o bucket bronze (S3).
+# Funções definidas aqui; cada script decide quando chamar.
+# ---------------------------------------------------------------------
+
+# Deve rodar ANTES de instalar o Docker: o daemon.json é lido na 1ª subida.
+# Rotaciona os logs e inclui o nome do serviço/task do Swarm em cada linha
+# (campo "attrs"), já que o arquivo de log só conhece o ID do container.
+configure_docker_logging() {
+    mkdir -p /etc/docker
+    if [ ! -f /etc/docker/daemon.json ]; then
+        cat > /etc/docker/daemon.json <<'DOCKER_DAEMON_EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3",
+    "labels-regex": "^com\\.docker\\.swarm\\.(service|task)\\.name$"
+  }
+}
+DOCKER_DAEMON_EOF
+    fi
+}
+
+install_fluentbit() {
+    echo "Instalando Fluent Bit..."
+    export DEBIAN_FRONTEND=noninteractive
+
+    local tentativas=0
+    until [ -x /opt/fluent-bit/bin/fluent-bit ]; do
+        tentativas=$((tentativas + 1))
+        if [ "$tentativas" -gt 10 ]; then
+            echo "Não foi possível instalar o Fluent Bit." >&2
+            return 1
+        fi
+        if curl -fsSL https://raw.githubusercontent.com/fluent/fluent-bit/master/install.sh -o /tmp/fluent-bit-install.sh && sh /tmp/fluent-bit-install.sh; then
+            break
+        fi
+        echo "Falha ao instalar o Fluent Bit. Tentando novamente em 10 segundos..."
+        sleep 10
+    done
+    rm -f /tmp/fluent-bit-install.sh
+
+    mkdir -p /var/lib/fluent-bit/s3
+
+    if [ -f /etc/fluent-bit/fluent-bit.conf ] && [ ! -f /etc/fluent-bit/fluent-bit.conf.orig ]; then
+        cp /etc/fluent-bit/fluent-bit.conf /etc/fluent-bit/fluent-bit.conf.orig
+    fi
+
+    cat > /etc/fluent-bit/parsers-familia.conf <<'FLB_PARSERS_EOF'
+${parsers_conf}
+FLB_PARSERS_EOF
+
+    cat > /etc/fluent-bit/fluent-bit.conf <<'FLB_CONF_EOF'
+${fluentbit_conf}
+FLB_CONF_EOF
+
+    if ! /opt/fluent-bit/bin/fluent-bit -c /etc/fluent-bit/fluent-bit.conf --dry-run; then
+        echo "Configuração do Fluent Bit inválida; serviço não iniciado." >&2
+        return 1
+    fi
+
+    systemctl enable fluent-bit.service
+    systemctl restart fluent-bit.service
+    echo "Fluent Bit ativo (logs -> s3://${bronze_bucket}/logs/)."
+}
+# fim do bloco Fluent Bit

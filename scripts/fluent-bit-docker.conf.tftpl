@@ -1,0 +1,53 @@
+[SERVICE]
+    flush        1
+    daemon       Off
+    log_level    info
+    parsers_file parsers-familia.conf
+
+# Logs de todos os containers (json-file do Docker)
+[INPUT]
+    name             tail
+    tag              docker.logs
+    path             /var/lib/docker/containers/*/*-json.log
+    parser           docker
+    path_key         log_file
+    db               /var/lib/fluent-bit/tail-docker.db
+    Mem_Buf_Limit    5MB
+    Refresh_Interval 5
+
+# Eventos do daemon Docker (start, stop, die, health_status, ...)
+[INPUT]
+    name        docker_events
+    tag         docker.events
+    unix_path   /var/run/docker.sock
+
+[FILTER]
+    name    record_modifier
+    match   docker.*
+    record  hostname ${node_hostname}
+
+[OUTPUT]
+    name             s3
+    match            docker.logs
+    region           ${aws_region}
+    bucket           ${bronze_bucket}
+    total_file_size  10M
+    upload_timeout   1m
+    format           json
+    json_date_key    date
+    json_date_format iso8601
+    store_dir        /var/lib/fluent-bit/s3/docker-logs
+    s3_key_format    /logs/docker/${node_hostname}/%Y/%m/%d/docker_log_%H-%M-%S-$UUID.json
+
+[OUTPUT]
+    name             s3
+    match            docker.events
+    region           ${aws_region}
+    bucket           ${bronze_bucket}
+    total_file_size  10M
+    upload_timeout   1m
+    format           json
+    json_date_key    date
+    json_date_format iso8601
+    store_dir        /var/lib/fluent-bit/s3/docker-events
+    s3_key_format    /logs/docker-events/${node_hostname}/%Y/%m/%d/docker_event_%H-%M-%S-$UUID.json
