@@ -342,3 +342,15 @@ O `LabInstanceProfile` precisa permitir `s3:PutObject` no bucket bronze. Para de
 sudo journalctl -u fluent-bit -f
 /opt/fluent-bit/bin/fluent-bit -c /etc/fluent-bit/fluent-bit.conf --dry-run
 ```
+
+## 🧪 Transformação de dados (Athena)
+
+Módulo `modules/transformacao` + `transformacao.tf`. Cria o banco Glue `familia_connect`, o workgroup Athena `familia-connect` (engine v3) e a Lambda `familia-connect-transformacao-athena`, que executa em ordem os SQLs de `lambda/transformacao/sql/` (dia 1 às 07:00 UTC, após a ingestão, ou manualmente — ver output `lambda_transformacao_invoke_cmd`).
+
+| Camada | Tabela | Conteúdo |
+|---|---|---|
+| Bronze | `bronze_cadunico`, `bronze_bolsa_sp` | Tabelas externas sobre os CSVs crus, partition projection por `ano` |
+| Silver | `silver_cadunico`, `silver_bolsa_sp` | Nulos/tipos tratados, todos os anos unificados (Iceberg/Parquet no bucket silver) |
+| Gold | `gold_bolsa_familia_distrito`, `gold_familias_sp_anual` | Variação anual por distrito e visão anual de SP juntando as duas bases (bucket gold) |
+
+Ordem: `terraform apply` → invocar a ingestão → invocar a transformação (ou `transformacao_executar_no_apply = true`).
