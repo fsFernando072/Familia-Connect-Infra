@@ -52,6 +52,11 @@ app_storage_s3_bucket = "familia-connect-gold-g02"
 
 rabbitmq_username = "admin"
 rabbitmq_password = "TROQUE_ESTA_SENHA"
+rabbitmq_queue = "sua.queue"
+rabbitmq_exchange = "sua.exchange"
+rabbitmq_binding = "sua.binding"
+
+processar_carteirinhas_image = "seu-usuario/familia-connect:latest"
 
 # ---------------------------------------------------------------------
 # SFTP restrito nos Fronts — cole o conteúdo de

@@ -212,6 +212,13 @@ locals {
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-back-a"
     fluentbit_setup        = local.fluentbit_setup_docker["fc-back-a"]
+
+    db_name                      = var.db_name
+    db_username                  = var.db_username
+    db_password                  = var.db_password
+    rabbitmq_username            = var.rabbitmq_username
+    rabbitmq_password            = var.rabbitmq_password
+    processar_carteirinhas_image = var.processar_carteirinhas_image
   })
 
   back_user_data_b = templatefile("${path.module}/scripts/config_back.sh.tftpl", {
@@ -219,6 +226,13 @@ locals {
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-back-b"
     fluentbit_setup        = local.fluentbit_setup_docker["fc-back-b"]
+
+    db_name                      = var.db_name
+    db_username                  = var.db_username
+    db_password                  = var.db_password
+    rabbitmq_username            = var.rabbitmq_username
+    rabbitmq_password            = var.rabbitmq_password
+    processar_carteirinhas_image = var.processar_carteirinhas_image
   })
 }
 
@@ -251,6 +265,7 @@ module "compute_back" {
       name_tag             = "ec2-back-B"
       associate_eip        = false
     }
+    
   }
 
   depends_on = [module.compute_front]
