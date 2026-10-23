@@ -161,7 +161,7 @@ variable "app_storage_s3_bucket" {
 # ---------------------------------------------------------------------
 variable "rabbitmq_username" {
   type        = string
-  default     = "familiconnect"
+  default     = "familiaconnect"
   description = "Usuário padrão do RabbitMQ (RABBITMQ_DEFAULT_USER) e do Spring (SPRING_RABBITMQ_USERNAME)"
   sensitive   = true
 }
@@ -177,22 +177,19 @@ variable "rabbitmq_exchange" {
   type        = string
   default     = "familia.carteirinhas"
   description = "Exchange do RabbitMQ que seria o broker de roteamento de mensagens"
-  sensitive = true
 }
 
 variable "rabbitmq_binding" {
   type        = string
   default     = "binding.carteirinhas"
   description = "Binding do RabbitMQ que liga as filas para exchange"
-  sensitive = true
 }
 
 
 variable "rabbitmq_queue" {
   type        = string
   default     = "queue.carteirinhas"
-  description = "Exchange do RabbitMQ que seria o broker de roteamento de mensagens"
-  sensitive = true
+  description = "Fila do RabbitMQ que vai receber as mensagens"
 }
 
 variable "processar_carteirinhas_image" {

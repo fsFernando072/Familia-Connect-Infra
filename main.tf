@@ -218,6 +218,9 @@ locals {
     db_password                  = var.db_password
     rabbitmq_username            = var.rabbitmq_username
     rabbitmq_password            = var.rabbitmq_password
+    rabbitmq_binding             = var.rabbitmq_binding
+    rabbitmq_exchange            = var.rabbitmq_exchange
+    rabbitmq_queue               = var.rabbitmq_queue
     processar_carteirinhas_image = var.processar_carteirinhas_image
   })
 
@@ -232,6 +235,9 @@ locals {
     db_password                  = var.db_password
     rabbitmq_username            = var.rabbitmq_username
     rabbitmq_password            = var.rabbitmq_password
+    rabbitmq_binding             = var.rabbitmq_binding
+    rabbitmq_exchange            = var.rabbitmq_exchange
+    rabbitmq_queue               = var.rabbitmq_queue      
     processar_carteirinhas_image = var.processar_carteirinhas_image
   })
 }
