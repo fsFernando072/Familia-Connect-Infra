@@ -161,16 +161,55 @@ variable "app_storage_s3_bucket" {
 # ---------------------------------------------------------------------
 variable "rabbitmq_username" {
   type        = string
-  default     = "admin"
+  default     = "familiaconnect"
   description = "Usuário padrão do RabbitMQ (RABBITMQ_DEFAULT_USER) e do Spring (SPRING_RABBITMQ_USERNAME)"
   sensitive   = true
 }
 
 variable "rabbitmq_password" {
   type        = string
+  default     = "familia@123"
   description = "Senha padrão do RabbitMQ (RABBITMQ_DEFAULT_PASS) e do Spring (SPRING_RABBITMQ_PASSWORD)"
   sensitive   = true
 }
+
+variable "rabbitmq_exchange" {
+  type        = string
+  default     = "familia.carteirinhas"
+  description = "Exchange do RabbitMQ que seria o broker de roteamento de mensagens"
+}
+
+variable "rabbitmq_binding" {
+  type        = string
+  default     = "binding.carteirinhas"
+  description = "Binding do RabbitMQ que liga as filas para exchange"
+}
+
+
+variable "rabbitmq_queue" {
+  type        = string
+  default     = "queue.carteirinhas"
+  description = "Fila do RabbitMQ que vai receber as mensagens"
+}
+
+variable "rabbitmq_queue_resposta" {
+  type        = string
+  default     = "queue.resposta"
+  description = "Fila de resposta (processar-carteirinhas -> back)"
+}
+
+variable "rabbitmq_routing_resposta" {
+  type        = string
+  default     = "routing.resposta"
+  description = "Routing key que liga a fila de resposta à exchange"
+}
+
+variable "processar_carteirinhas_image" {
+  type        = string
+  default     = "miguelramoslima/familia-connect:latest"
+  description = "Imagem Docker Hub do serviço processar-carteirinhas, executado nas EC2 de back"
+}
+
 
 # ---------------------------------------------------------------------
 # SFTP restrito (roteiro-sftp-linux)

@@ -186,7 +186,22 @@ STACK_EOF
     docker node update --label-add fc_role=ocr fc-ocr-a
     docker node update --label-add fc_role=ocr fc-ocr-b
 
-    echo "Publicando a stack Família Connect..."
+    # O depends_on do compose não existe no Swarm: o back só sobe (fase 2)
+    # depois que rabbitmq e redis estiverem saudáveis (fase 1).
+    echo "Fase 1: publicando a stack com back em 0 réplicas (rabbitmq + redis sobem primeiro)..."
+    sed -i "s|__BACK_REPLICAS__|0|g" "$STACK_FILE"
+    docker stack deploy -c "$STACK_FILE" familia-connect
+
+    for SVC in rabbitmq redis; do
+        until [ "$(docker service ls --filter name=familia-connect_$SVC --format '{{.Replicas}}')" = "1/1" ]; do
+            echo "Aguardando $SVC ficar saudável..."
+            sleep 10
+        done
+    done
+
+    echo "Fase 2: rabbitmq e redis saudáveis; subindo o back..."
+    sed -i "s|replicas: 0$|replicas: 2|" "$STACK_FILE"
+    grep -q "replicas: 0" "$STACK_FILE" && { echo "Falha ao ajustar réplicas do back" >&2; exit 1; }
     docker stack deploy -c "$STACK_FILE" familia-connect
 else
     echo "Entrando como segundo manager..."
