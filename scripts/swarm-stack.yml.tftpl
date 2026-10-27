@@ -44,14 +44,20 @@ services:
       RABBITMQ_EXCHANGE: "${rabbitmq_exchange}"
       RABBITMQ_BINDING: "${rabbitmq_binding}"
       RABBITMQ_QUEUE: "${rabbitmq_queue}"
+      RABBITMQ_QUEUE_RESPOSTA: "${rabbitmq_queue_resposta}"
+      RABBITMQ_ROUTING_RESPOSTA: "${rabbitmq_routing_resposta}"
 
       SPRING_RABBITMQ_USERNAME: "${rabbitmq_username}"
       SPRING_RABBITMQ_PASSWORD: "${rabbitmq_password}"
+      SPRING_RABBITMQ_HOST: "rabbitmq"
+      SPRING_DATA_REDIS_HOST: "redis"
+      SPRING_DATA_REDIS_PORT: "6379"
     networks:
       - fc-overlay
     deploy:
       endpoint_mode: vip
-      replicas: 2
+      # Subido em 0 na 1a fase; o manager escala para 2 quando rabbitmq e redis estiverem saudaveis
+      replicas: __BACK_REPLICAS__
       update_config:
         parallelism: 1
         order: start-first
@@ -96,6 +102,25 @@ services:
         constraints:
           - node.labels.fc_role == back
           - node.hostname == fc-back-a
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - fc-overlay
+    deploy:
+      endpoint_mode: vip
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.labels.fc_role == back
 
   ocr:
     image: fsfernando072/familia-connect-ocr:latest

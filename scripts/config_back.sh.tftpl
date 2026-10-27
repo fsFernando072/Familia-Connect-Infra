@@ -68,6 +68,12 @@ done
 
 echo "Backend worker $NODE_HOSTNAME entrou no Swarm."
 
+echo "Aguardando o RabbitMQ (10.0.5.10:5672) ficar disponível antes de subir o processar-carteirinhas..."
+until timeout 3 bash -c '</dev/tcp/10.0.5.10/5672' 2>/dev/null; do
+    echo "RabbitMQ ainda não disponível. Aguardando 10 segundos..."
+    sleep 10
+done
+
 echo "Subindo container processar-carteirinhas..."
 mkdir -p /srv/carteirinhas
 docker rm -f processar-carteirinhas >/dev/null 2>&1 || true
@@ -84,6 +90,8 @@ until docker run -d --name processar-carteirinhas --restart unless-stopped \
     -e RABBITMQ_EXCHANGE="${rabbitmq_exchange}" \
     -e RABBITMQ_BINDING="${rabbitmq_binding}" \
     -e RABBITMQ_QUEUE="${rabbitmq_queue}" \
+    -e RABBITMQ_QUEUE_RESPOSTA="${rabbitmq_queue_resposta}" \
+    -e RABBITMQ_ROUTING_RESPOSTA="${rabbitmq_routing_resposta}" \
     ${processar_carteirinhas_image}; do
     echo "Falha ao subir o processar-carteirinhas (pull ou run). Tentando novamente em 10 segundos..."
     docker rm -f processar-carteirinhas >/dev/null 2>&1 || true

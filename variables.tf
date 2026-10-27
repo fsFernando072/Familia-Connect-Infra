@@ -192,6 +192,18 @@ variable "rabbitmq_queue" {
   description = "Fila do RabbitMQ que vai receber as mensagens"
 }
 
+variable "rabbitmq_queue_resposta" {
+  type        = string
+  default     = "queue.resposta"
+  description = "Fila de resposta (processar-carteirinhas -> back)"
+}
+
+variable "rabbitmq_routing_resposta" {
+  type        = string
+  default     = "routing.resposta"
+  description = "Routing key que liga a fila de resposta à exchange"
+}
+
 variable "processar_carteirinhas_image" {
   type        = string
   default     = "miguelramoslima/familia-connect:latest"

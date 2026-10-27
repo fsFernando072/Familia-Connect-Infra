@@ -221,6 +221,8 @@ locals {
     rabbitmq_binding             = var.rabbitmq_binding
     rabbitmq_exchange            = var.rabbitmq_exchange
     rabbitmq_queue               = var.rabbitmq_queue
+    rabbitmq_queue_resposta      = var.rabbitmq_queue_resposta
+    rabbitmq_routing_resposta    = var.rabbitmq_routing_resposta
     processar_carteirinhas_image = var.processar_carteirinhas_image
   })
 
@@ -237,7 +239,9 @@ locals {
     rabbitmq_password            = var.rabbitmq_password
     rabbitmq_binding             = var.rabbitmq_binding
     rabbitmq_exchange            = var.rabbitmq_exchange
-    rabbitmq_queue               = var.rabbitmq_queue      
+    rabbitmq_queue               = var.rabbitmq_queue
+    rabbitmq_queue_resposta      = var.rabbitmq_queue_resposta
+    rabbitmq_routing_resposta    = var.rabbitmq_routing_resposta
     processar_carteirinhas_image = var.processar_carteirinhas_image
   })
 }
@@ -346,6 +350,11 @@ locals {
     ocr_space_api_key     = var.ocr_space_api_key
     rabbitmq_username     = var.rabbitmq_username
     rabbitmq_password     = var.rabbitmq_password
+    rabbitmq_exchange         = var.rabbitmq_exchange
+    rabbitmq_binding          = var.rabbitmq_binding
+    rabbitmq_queue            = var.rabbitmq_queue
+    rabbitmq_queue_resposta   = var.rabbitmq_queue_resposta
+    rabbitmq_routing_resposta = var.rabbitmq_routing_resposta
   })
 }
 
