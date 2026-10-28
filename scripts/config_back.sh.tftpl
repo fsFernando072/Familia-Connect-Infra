@@ -6,8 +6,6 @@ NODE_HOSTNAME="${node_hostname}"
 
 hostnamectl set-hostname "$NODE_HOSTNAME"
 
-${fluentbit_setup}
-
 echo "Aguardando conexão com a internet e resolução de DNS..."
 until curl -4 -s --connect-timeout 5 https://us-east-1.ec2.archive.ubuntu.com > /dev/null; do
     echo "Rede ou DNS ainda não disponíveis. Aguardando 5 segundos..."
@@ -41,8 +39,6 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 systemctl enable docker
 systemctl start docker
 
-# Fluent Bit: logs/eventos do Docker -> bucket bronze (falha não impede o Swarm)
-install_fluentbit || echo "Falha ao instalar o Fluent Bit; seguindo com o Swarm."
 
 set -e
 
@@ -74,28 +70,4 @@ until timeout 3 bash -c '</dev/tcp/10.0.5.10/5672' 2>/dev/null; do
     sleep 10
 done
 
-echo "Subindo container processar-carteirinhas..."
 mkdir -p /srv/carteirinhas
-docker rm -f processar-carteirinhas >/dev/null 2>&1 || true
-
-until docker run -d --name processar-carteirinhas --restart unless-stopped \
-    -p 8081:8081 \
-    -v /srv/carteirinhas:/app/carteirinhas \
-    -e DB_URL="jdbc:mysql://10.0.7.10:3306/${db_name}" \
-    -e DB_USER="${db_username}" \
-    -e DB_PASSWORD="${db_password}" \
-    -e RABBITMQ_HOST="10.0.5.10" \
-    -e RABBITMQ_USER="${rabbitmq_username}" \
-    -e RABBITMQ_PASS="${rabbitmq_password}" \
-    -e RABBITMQ_EXCHANGE="${rabbitmq_exchange}" \
-    -e RABBITMQ_BINDING="${rabbitmq_binding}" \
-    -e RABBITMQ_QUEUE="${rabbitmq_queue}" \
-    -e RABBITMQ_QUEUE_RESPOSTA="${rabbitmq_queue_resposta}" \
-    -e RABBITMQ_ROUTING_RESPOSTA="${rabbitmq_routing_resposta}" \
-    ${processar_carteirinhas_image}; do
-    echo "Falha ao subir o processar-carteirinhas (pull ou run). Tentando novamente em 10 segundos..."
-    docker rm -f processar-carteirinhas >/dev/null 2>&1 || true
-    sleep 10
-done
-
-echo "processar-carteirinhas em execução em $NODE_HOSTNAME."

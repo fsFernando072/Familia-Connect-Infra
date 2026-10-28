@@ -141,6 +141,37 @@ services:
           - node.labels.fc_role == ocr
         max_replicas_per_node: 1
 
+  processar-carteirinhas:
+    image: ${processar_carteirinhas_image}
+    environment:
+      DB_URL: "jdbc:mysql://10.0.7.10:3306/${db_name}"
+      DB_USER: "${db_username}"
+      DB_PASSWORD: "${db_password}"
+      RABBITMQ_HOST: "rabbitmq"
+      RABBITMQ_USER: "${rabbitmq_username}"
+      RABBITMQ_PASS: "${rabbitmq_password}"
+      RABBITMQ_EXCHANGE: "${rabbitmq_exchange}"
+      RABBITMQ_BINDING: "${rabbitmq_binding}"
+      RABBITMQ_QUEUE: "${rabbitmq_queue}"
+      RABBITMQ_QUEUE_RESPOSTA: "${rabbitmq_queue_resposta}"
+      RABBITMQ_ROUTING_RESPOSTA: "${rabbitmq_routing_resposta}"
+    volumes:
+      - /srv/carteirinhas:/app/carteirinhas
+    networks:
+      - fc-overlay
+    deploy:
+      endpoint_mode: vip
+      replicas: __BACK_REPLICAS__
+      update_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.labels.fc_role == back
+        max_replicas_per_node: 1
+
 volumes:
   rabbitmq_data:
 

@@ -6,8 +6,6 @@ NODE_HOSTNAME="${node_hostname}"
 
 hostnamectl set-hostname "$NODE_HOSTNAME"
 
-${fluentbit_setup}
-
 echo "Aguardando conexão com a internet e resolução de DNS..."
 until curl -4 -s --connect-timeout 5 https://us-east-1.ec2.archive.ubuntu.com > /dev/null; do
     echo "Rede ou DNS ainda não disponíveis. Aguardando 5 segundos..."
@@ -40,9 +38,6 @@ apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 systemctl enable docker
 systemctl start docker
-
-# Fluent Bit: logs/eventos do Docker -> bucket bronze (falha não impede o Swarm)
-install_fluentbit || echo "Falha ao instalar o Fluent Bit; seguindo com o Swarm."
 
 set -e
 

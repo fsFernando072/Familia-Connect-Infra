@@ -8,8 +8,6 @@ STACK_FILE="/opt/familia-connect/swarm-stack.yml"
 
 hostnamectl set-hostname "${node_hostname}"
 
-${fluentbit_setup}
-
 # ---------------------------------------------------------------------
 # SFTP restrito (roteiro-sftp-linux): usuário só com SFTP, sem shell,
 # preso em ChrootDirectory. Recebe arquivos (ex.: stack/compose do Swarm)
@@ -120,9 +118,6 @@ install_docker() {
 }
 
 install_docker
-
-# Fluent Bit: logs/eventos do Docker -> bucket bronze (falha não impede o Swarm)
-install_fluentbit || echo "Falha ao instalar o Fluent Bit; seguindo com o Swarm."
 
 set -e
 

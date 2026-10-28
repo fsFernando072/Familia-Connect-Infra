@@ -327,10 +327,6 @@ Este projeto está sob a licença MIT. Consulte o arquivo [LICENSE](LICENSE) par
 
 ---
 
-## 📈 Logs com Fluent Bit (bucket bronze)
-
-Todas as EC2 instalam o **Fluent Bit** no boot (`scripts/fluentbit_setup.sh.tftpl`) e enviam os logs em **JSON** para o bucket bronze, sob o prefixo `logs/`:
-
 | Instância | O que coleta | Chave no S3 |
 |---|---|---|
 | Front / Back / OCR | logs dos containers + eventos do Docker | `logs/docker/<host>/AAAA/MM/DD/...json` e `logs/docker-events/<host>/AAAA/MM/DD/...json` |
@@ -338,10 +334,6 @@ Todas as EC2 instalam o **Fluent Bit** no boot (`scripts/fluentbit_setup.sh.tftp
 
 O `LabInstanceProfile` precisa permitir `s3:PutObject` no bucket bronze. Para depurar na instância:
 
-```bash
-sudo journalctl -u fluent-bit -f
-/opt/fluent-bit/bin/fluent-bit -c /etc/fluent-bit/fluent-bit.conf --dry-run
-```
 
 ## 🧪 Transformação de dados (Athena)
 
