@@ -136,6 +136,8 @@ Portas internas necessárias para o Swarm:
 - TCP/UDP `7946`: comunicação entre nós
 - UDP `4789`: rede overlay
 
+O **Grafana** (`fsfernando072/familia-connect-grafana`, imagem publicada pela pipeline do repositório do front) é um serviço da stack, com 1 réplica em um worker de back e **sem porta publicada**. O Front o expõe em `/grafana/` (proxy do Nginx, só para quem está logado) e a tela Dashboard o embute via iframe. O Grafana consulta o back em `host.docker.internal:8080`, nome que a stack cria como *alias* do serviço `back` na rede overlay (os dashboards têm essa URL fixa). Variáveis: `grafana_api_token` (o mesmo valor vai para o back e para o Grafana) e `grafana_admin_password`. Dashboards e datasource vêm embutidos na imagem; para alterá-los, publique uma nova versão da imagem.
+
 O **RabbitMQ** (`rabbitmq:4-management`) é um serviço da stack, com 1 réplica fixada no nó `fc-back-a` (volume `rabbitmq_data` local), na mesma rede overlay. O Back o acessa por `rabbitmq:5672` (`SPRING_RABBITMQ_*`). As portas `5672` (AMQP) e `15672` (painel) são publicadas em `mode: host` nesse nó e liberadas no `back-sg` apenas para a VPC; o painel, por estar em subnet privada, é acessado via túnel SSH (`ssh -L 15672:localhost:15672 ...`). Usuário/senha vêm das variáveis `rabbitmq_username` e `rabbitmq_password`.
 
 O usuário final continua acessando apenas o ALB Front público. Como o tráfego entre os serviços passa pela overlay (VXLAN), as portas de aplicação `8080`/`8000` não precisam mais estar abertas nos Security Groups.
@@ -333,11 +335,6 @@ Este projeto está sob a licença MIT. Consulte o arquivo [LICENSE](LICENSE) par
 | DB | error log e slow query log do MySQL | `logs/mysql/fc-db/error/AAAA/MM/DD/...json` e `logs/mysql/fc-db/slow/AAAA/MM/DD/...json` |
 
 O `LabInstanceProfile` precisa permitir `s3:PutObject` no bucket bronze. Para depurar na instância:
-
-```bash
-sudo journalctl -u fluent-bit -f
-/opt/fluent-bit/bin/fluent-bit -c /etc/fluent-bit/fluent-bit.conf --dry-run
-```
 
 ## 🧪 Tratamento bronze → silver (AWS Glue)
 

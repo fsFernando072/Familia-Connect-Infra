@@ -214,6 +214,21 @@ variable "processar_carteirinhas_image" {
 # ---------------------------------------------------------------------
 # SFTP restrito (roteiro-sftp-linux)
 # ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Grafana
+# ---------------------------------------------------------------------
+variable "grafana_api_token" {
+  type        = string
+  description = "Segredo compartilhado entre o Grafana e o backend (GRAFANA_API_TOKEN nos dois). Use um valor longo e aleatório."
+  sensitive   = true
+}
+
+variable "grafana_admin_password" {
+  type        = string
+  description = "Senha do usuário admin do Grafana (GF_SECURITY_ADMIN_PASSWORD)"
+  sensitive   = true
+}
+
 variable "sftp_username" {
   type        = string
   default     = "familia_sftp"

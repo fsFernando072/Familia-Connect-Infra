@@ -58,6 +58,10 @@ rabbitmq_binding = "sua.binding"
 
 processar_carteirinhas_image = "seu-usuario/familia-connect:latest"
 
+# Grafana: o mesmo grafana_api_token é entregue ao backend e ao Grafana
+grafana_api_token      = "TROQUE_POR_UM_SEGREDO_LONGO_E_ALEATORIO"
+grafana_admin_password = "TROQUE_ESTA_SENHA"
+
 # ---------------------------------------------------------------------
 # SFTP restrito nos Fronts — cole o conteúdo de
 # ~/.ssh/familiasftp.pub (chave PÚBLICA)

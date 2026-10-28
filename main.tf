@@ -300,6 +300,8 @@ locals {
     rabbitmq_queue_resposta   = var.rabbitmq_queue_resposta
     rabbitmq_routing_resposta = var.rabbitmq_routing_resposta
     processar_carteirinhas_image = var.processar_carteirinhas_image
+    grafana_api_token         = var.grafana_api_token
+    grafana_admin_password    = var.grafana_admin_password
   })
 }
 
