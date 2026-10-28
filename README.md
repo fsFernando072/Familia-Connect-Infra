@@ -342,3 +342,14 @@ O `LabInstanceProfile` precisa permitir `s3:PutObject` no bucket bronze. Para de
 sudo journalctl -u fluent-bit -f
 /opt/fluent-bit/bin/fluent-bit -c /etc/fluent-bit/fluent-bit.conf --dry-run
 ```
+
+## 🧪 Tratamento bronze → silver (AWS Glue)
+
+Módulo `modules/glue` + `glue.tf`; código PySpark em `glue/transformacao/transformacao_silver.py`. O job `familia-connect-bronze-para-silver` lê os CSVs do bucket bronze, trata os dados e grava Parquet no bucket silver (agendado para o dia 1 às 07:00 UTC, após a ingestão).
+
+| Base | Saída no silver | Tratamentos |
+|---|---|---|
+| familias-cadastro-unico | `cadunico/ano=AAAA/` | Leitura por nome de coluna, vazio/"null"/"NaN" → NULL, contagens nulas → 0, taxas nulas mantidas, `anomes_s` → ano/mes/ano_mes, descarte de inválidos, dedupe por município+mês |
+| bolsa-familia-sp | `bolsa-familia-sp/ano=AAAA/` | Detecta encoding e separador por arquivo, harmoniza layouts (2 e 4 colunas), remove ponto de milhar, padroniza nome do distrito, descarta totais, dedupe por ano+distrito |
+
+Execução manual: `aws glue start-job-run --job-name familia-connect-bronze-para-silver`.
