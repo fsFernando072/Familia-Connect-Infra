@@ -83,7 +83,11 @@ def salvar_s3(conteudo, chave):
 
 
 def csv_tem_dados(conteudo):
-    """True se houver pelo menos cabeçalho + 1 linha de dados."""
+    """True se for um CSV de verdade (nao uma pagina HTML de erro/manutencao)
+    com pelo menos cabecalho + 1 linha de dados."""
+    if conteudo.lstrip(b"\xef\xbb\xbf \r\n\t")[:1] == b"<":
+        logger.warning("Conteudo baixado e HTML (servico fora do ar/manutencao?), nao CSV")
+        return False
     linhas = [l for l in conteudo.splitlines() if l.strip()]
     return len(linhas) > 1
 
@@ -100,6 +104,9 @@ def processar_base1(anos):
                 logger.warning("Base 1 sem dados para %s", ano)
                 resultado["vazio"].append(ano)
                 continue
+            cabecalho = conteudo.split(b"\n", 1)[0].decode("utf-8", errors="replace")
+            if "codigo_ibge" not in cabecalho:
+                raise ValueError(f"Cabecalho inesperado na base 1: {cabecalho[:120]!r}")
             chave = f"familias-cadastro-unico/{ano}/familias-cadastro-unico-{ano}.csv"
             salvar_s3(conteudo, chave)
             resultado["ok"].append(ano)
