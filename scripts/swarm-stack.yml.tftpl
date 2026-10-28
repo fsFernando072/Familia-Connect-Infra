@@ -155,22 +155,19 @@ services:
       RABBITMQ_QUEUE: "${rabbitmq_queue}"
       RABBITMQ_QUEUE_RESPOSTA: "${rabbitmq_queue_resposta}"
       RABBITMQ_ROUTING_RESPOSTA: "${rabbitmq_routing_resposta}"
-    volumes:
-      - /srv/carteirinhas:/app/carteirinhas
+      STORAGE_LOCAL_ENABLED: "false"
+      AWS_S3_BUCKET: "${app_storage_s3_bucket}"
+      AWS_REGION: "${app_storage_s3_region}"
     networks:
       - fc-overlay
     deploy:
       endpoint_mode: vip
-      replicas: __BACK_REPLICAS__
-      update_config:
-        parallelism: 1
-        order: start-first
+      replicas: 1
       restart_policy:
         condition: on-failure
       placement:
         constraints:
           - node.labels.fc_role == back
-        max_replicas_per_node: 1
 
 volumes:
   rabbitmq_data:
