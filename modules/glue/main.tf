@@ -53,3 +53,63 @@ resource "aws_glue_trigger" "mensal" {
     job_name = aws_glue_job.bronze_para_silver.name
   }
 }
+
+# ---------------------------------------------------------------------
+# Data Catalog + Crawler (silver)
+#   Cataloga os Parquets do silver para consulta no Athena.
+#   Roda automaticamente quando o job bronze -> silver termina com sucesso.
+# ---------------------------------------------------------------------
+resource "aws_glue_catalog_database" "silver" {
+  count       = var.enable_crawler ? 1 : 0
+  name        = var.database_name
+  description = "Tabelas da camada silver do Familia Connect (catalogadas pelo crawler)"
+}
+
+resource "aws_glue_crawler" "silver" {
+  count         = var.enable_crawler ? 1 : 0
+  name          = var.crawler_name
+  description   = "Cataloga os Parquets do silver (cadunico e bolsa-familia-sp)"
+  database_name = aws_glue_catalog_database.silver[0].name
+  role          = data.aws_iam_role.glue.arn
+  table_prefix  = var.table_prefix
+
+  s3_target {
+    path = "s3://${var.silver_bucket}/cadunico/"
+  }
+
+  s3_target {
+    path = "s3://${var.silver_bucket}/bolsa-familia-sp/"
+  }
+
+  schema_change_policy {
+    update_behavior = "UPDATE_IN_DATABASE"
+    delete_behavior = "LOG"
+  }
+
+  recrawl_policy {
+    recrawl_behavior = "CRAWL_EVERYTHING"
+  }
+
+  tags = {
+    Name  = var.crawler_name
+    Layer = "silver"
+  }
+}
+
+# Dispara o crawler logo após o job terminar com sucesso
+resource "aws_glue_trigger" "crawler_apos_job" {
+  count = var.enable_crawler ? 1 : 0
+  name  = "${var.crawler_name}-apos-job"
+  type  = "CONDITIONAL"
+
+  predicate {
+    conditions {
+      job_name = aws_glue_job.bronze_para_silver.name
+      state    = "SUCCEEDED"
+    }
+  }
+
+  actions {
+    crawler_name = aws_glue_crawler.silver[0].name
+  }
+}

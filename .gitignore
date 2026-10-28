@@ -15,3 +15,4 @@ infraestrutura_nuvem.png
 .build
 out.json
 *.zip
+**/__pycache__/

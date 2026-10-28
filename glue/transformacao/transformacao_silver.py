@@ -246,6 +246,21 @@ def processar_bolsa_sp():
     )
     print(f"[bolsa-sp] {total} linhas gravadas em s3://{SILVER}/bolsa-familia-sp/")
 
+def limpar_marcadores_folder():
+    """Remove os objetos vazios '*_$folder$' que o conector S3 do Hadoop/EMRFS cria
+    ao gravar (ex: cadunico_$folder$). Sao so marcadores de 'pasta', sem dados."""
+    chaves = []
+    for pagina in s3.get_paginator("list_objects_v2").paginate(Bucket=SILVER):
+        chaves += [o["Key"] for o in pagina.get("Contents", []) if o["Key"].endswith("_$folder$")]
+    for i in range(0, len(chaves), 1000):
+        s3.delete_objects(
+            Bucket=SILVER,
+            Delete={"Objects": [{"Key": k} for k in chaves[i:i + 1000]], "Quiet": True},
+        )
+    print(f"[limpeza] {len(chaves)} marcadores _$folder$ removidos de s3://{SILVER}/")
+
+
 processar_cadunico()
 processar_bolsa_sp()
+limpar_marcadores_folder()
 job.commit()

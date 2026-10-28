@@ -23,3 +23,17 @@ output "glue_job_run_cmd" {
   description = "Comando para rodar o tratamento manualmente (após a ingestão)"
   value       = "aws glue start-job-run --job-name ${module.glue.job_name} --region ${var.aws_region}"
 }
+
+output "glue_crawler_name" {
+  value = module.glue.crawler_name
+}
+
+output "glue_database_name" {
+  description = "Banco do Data Catalog (consultar no Athena)"
+  value       = module.glue.database_name
+}
+
+output "glue_crawler_run_cmd" {
+  description = "Comando para rodar o crawler manualmente (após o job)"
+  value       = "aws glue start-crawler --name ${module.glue.crawler_name} --region ${var.aws_region}"
+}

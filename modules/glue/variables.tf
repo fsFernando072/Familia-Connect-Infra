@@ -37,3 +37,27 @@ variable "schedule" {
   default     = "cron(0 7 1 * ? *)"
   description = "Agendamento do job (padrão: dia 1 às 07:00 UTC, 1h depois da ingestão). Vazio = sem agendamento"
 }
+
+variable "enable_crawler" {
+  type        = bool
+  default     = true
+  description = "Cria o banco no Data Catalog e o crawler do silver (executado após o job)"
+}
+
+variable "database_name" {
+  type        = string
+  default     = "familia_connect_silver"
+  description = "Banco do Glue Data Catalog onde o crawler cria as tabelas"
+}
+
+variable "crawler_name" {
+  type        = string
+  default     = "familia-connect-silver-crawler"
+  description = "Nome do crawler do silver"
+}
+
+variable "table_prefix" {
+  type        = string
+  default     = ""
+  description = "Prefixo opcional das tabelas criadas (ex: silver_). Vazio = tabelas 'cadunico' e 'bolsa_familia_sp'"
+}
