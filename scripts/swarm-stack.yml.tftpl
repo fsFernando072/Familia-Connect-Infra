@@ -39,15 +39,25 @@ services:
       APP_STORAGE_S3_BUCKET: "${app_storage_s3_bucket}"
       APP_STORAGE_S3_REGION: "${app_storage_s3_region}"
       CORS_ALLOWED_ORIGINS: "http://__FRONT_ALB_DNS__"
-      SPRING_RABBITMQ_HOST: "rabbitmq"
-      SPRING_RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: "${rabbitmq_username}"
+      RABBITMQ_PASS: "${rabbitmq_password}"
+      RABBITMQ_EXCHANGE: "${rabbitmq_exchange}"
+      RABBITMQ_BINDING: "${rabbitmq_binding}"
+      RABBITMQ_QUEUE: "${rabbitmq_queue}"
+      RABBITMQ_QUEUE_RESPOSTA: "${rabbitmq_queue_resposta}"
+      RABBITMQ_ROUTING_RESPOSTA: "${rabbitmq_routing_resposta}"
+
       SPRING_RABBITMQ_USERNAME: "${rabbitmq_username}"
       SPRING_RABBITMQ_PASSWORD: "${rabbitmq_password}"
+      SPRING_RABBITMQ_HOST: "rabbitmq"
+      SPRING_DATA_REDIS_HOST: "redis"
+      SPRING_DATA_REDIS_PORT: "6379"
     networks:
       - fc-overlay
     deploy:
       endpoint_mode: vip
-      replicas: 2
+      # Subido em 0 na 1a fase; o manager escala para 2 quando rabbitmq e redis estiverem saudaveis
+      replicas: __BACK_REPLICAS__
       update_config:
         parallelism: 1
         order: start-first
@@ -93,6 +103,25 @@ services:
           - node.labels.fc_role == back
           - node.hostname == fc-back-a
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - fc-overlay
+    deploy:
+      endpoint_mode: vip
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.labels.fc_role == back
+
   ocr:
     image: fsfernando072/familia-connect-ocr:latest
     environment:
@@ -111,6 +140,34 @@ services:
         constraints:
           - node.labels.fc_role == ocr
         max_replicas_per_node: 1
+
+  processar-carteirinhas:
+    image: ${processar_carteirinhas_image}
+    environment:
+      DB_URL: "jdbc:mysql://10.0.7.10:3306/${db_name}"
+      DB_USER: "${db_username}"
+      DB_PASSWORD: "${db_password}"
+      RABBITMQ_HOST: "rabbitmq"
+      RABBITMQ_USER: "${rabbitmq_username}"
+      RABBITMQ_PASS: "${rabbitmq_password}"
+      RABBITMQ_EXCHANGE: "${rabbitmq_exchange}"
+      RABBITMQ_BINDING: "${rabbitmq_binding}"
+      RABBITMQ_QUEUE: "${rabbitmq_queue}"
+      RABBITMQ_QUEUE_RESPOSTA: "${rabbitmq_queue_resposta}"
+      RABBITMQ_ROUTING_RESPOSTA: "${rabbitmq_routing_resposta}"
+      STORAGE_LOCAL_ENABLED: "false"
+      AWS_S3_BUCKET: "${app_storage_s3_bucket}"
+      AWS_REGION: "${app_storage_s3_region}"
+    networks:
+      - fc-overlay
+    deploy:
+      endpoint_mode: vip
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.labels.fc_role == back
 
 volumes:
   rabbitmq_data:

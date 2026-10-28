@@ -74,46 +74,12 @@ resource "aws_ssm_parameter" "swarm_worker_token" {
 }
 
 # ---------------------------------------------------------------------
-# Fluent Bit — logs em JSON para o bucket bronze (S3)
-# Instâncias com Docker (front/back/ocr): logs + eventos dos containers.
-# Instância de banco: error log + slow query log do MySQL.
-# ---------------------------------------------------------------------
-locals {
-  fluentbit_parsers_conf = file("${path.module}/scripts/fluent-bit-parsers.conf")
-
-  fluentbit_docker_hosts = ["fc-front-a", "fc-front-b", "fc-back-a", "fc-back-b", "fc-ocr-a", "fc-ocr-b"]
-
-  fluentbit_setup_docker = {
-    for host in local.fluentbit_docker_hosts : host => templatefile("${path.module}/scripts/fluentbit_setup.sh.tftpl", {
-      bronze_bucket = var.s3_bronze_bucket_name
-      parsers_conf  = local.fluentbit_parsers_conf
-      fluentbit_conf = templatefile("${path.module}/scripts/fluent-bit-docker.conf.tftpl", {
-        aws_region    = var.aws_region
-        bronze_bucket = var.s3_bronze_bucket_name
-        node_hostname = host
-      })
-    })
-  }
-
-  fluentbit_setup_db = templatefile("${path.module}/scripts/fluentbit_setup.sh.tftpl", {
-    bronze_bucket = var.s3_bronze_bucket_name
-    parsers_conf  = local.fluentbit_parsers_conf
-    fluentbit_conf = templatefile("${path.module}/scripts/fluent-bit-mysql.conf.tftpl", {
-      aws_region    = var.aws_region
-      bronze_bucket = var.s3_bronze_bucket_name
-      node_hostname = "fc-db"
-    })
-  })
-}
-
-# ---------------------------------------------------------------------
 # Banco de dados
 # ---------------------------------------------------------------------
 locals {
   db_user_data = templatefile("${path.module}/scripts/config_db.sh.tftpl", {
-    db_username     = var.db_username
-    db_password     = var.db_password
-    fluentbit_setup = local.fluentbit_setup_db
+    db_username = var.db_username
+    db_password = var.db_password
   })
 }
 
@@ -148,7 +114,6 @@ locals {
     swarm_manager_parameter = local.swarm_manager_parameter
     swarm_worker_parameter  = local.swarm_worker_parameter
     node_hostname           = "fc-front-a"
-    fluentbit_setup         = local.fluentbit_setup_docker["fc-front-a"]
     sftp_username           = var.sftp_username
     sftp_root               = local.sftp_root
     sftp_public_key         = trimspace(var.sftp_public_key)
@@ -161,7 +126,6 @@ locals {
     swarm_manager_parameter = local.swarm_manager_parameter
     swarm_worker_parameter  = local.swarm_worker_parameter
     node_hostname           = "fc-front-b"
-    fluentbit_setup         = local.fluentbit_setup_docker["fc-front-b"]
     sftp_username           = var.sftp_username
     sftp_root               = local.sftp_root
     sftp_public_key         = trimspace(var.sftp_public_key)
@@ -211,14 +175,20 @@ locals {
     manager_ip             = local.swarm_manager_ip
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-back-a"
-    fluentbit_setup        = local.fluentbit_setup_docker["fc-back-a"]
+
+    db_name                      = var.db_name
+    db_username                  = var.db_username
+    db_password                  = var.db_password
   })
 
   back_user_data_b = templatefile("${path.module}/scripts/config_back.sh.tftpl", {
     manager_ip             = local.swarm_manager_ip
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-back-b"
-    fluentbit_setup        = local.fluentbit_setup_docker["fc-back-b"]
+
+    db_name                      = var.db_name
+    db_username                  = var.db_username
+    db_password                  = var.db_password
   })
 }
 
@@ -251,6 +221,7 @@ module "compute_back" {
       name_tag             = "ec2-back-B"
       associate_eip        = false
     }
+
   }
 
   depends_on = [module.compute_front]
@@ -264,14 +235,12 @@ locals {
     manager_ip             = local.swarm_manager_ip
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-ocr-a"
-    fluentbit_setup        = local.fluentbit_setup_docker["fc-ocr-a"]
   })
 
   ocr_user_data_b = templatefile("${path.module}/scripts/config_ocr.sh.tftpl", {
     manager_ip             = local.swarm_manager_ip
     swarm_worker_parameter = local.swarm_worker_parameter
     node_hostname          = "fc-ocr-b"
-    fluentbit_setup        = local.fluentbit_setup_docker["fc-ocr-b"]
   })
 }
 
@@ -314,17 +283,23 @@ module "compute_ocr" {
 # ---------------------------------------------------------------------
 locals {
   swarm_stack_template = templatefile("${path.module}/scripts/swarm-stack.yml.tftpl", {
-    db_name               = var.db_name
-    db_username           = var.db_username
-    db_password           = var.db_password
-    db_type_ddl           = var.db_type_ddl
-    jwt_secret            = var.jwt_secret
-    app_storage_type      = var.app_storage_type
-    app_storage_s3_bucket = var.s3_gold_bucket_name
-    app_storage_s3_region = var.aws_region
-    ocr_space_api_key     = var.ocr_space_api_key
-    rabbitmq_username     = var.rabbitmq_username
-    rabbitmq_password     = var.rabbitmq_password
+    db_name                   = var.db_name
+    db_username               = var.db_username
+    db_password               = var.db_password
+    db_type_ddl               = var.db_type_ddl
+    jwt_secret                = var.jwt_secret
+    app_storage_type          = var.app_storage_type
+    app_storage_s3_bucket     = var.s3_gold_bucket_name
+    app_storage_s3_region     = var.aws_region
+    ocr_space_api_key         = var.ocr_space_api_key
+    rabbitmq_username         = var.rabbitmq_username
+    rabbitmq_password         = var.rabbitmq_password
+    rabbitmq_exchange         = var.rabbitmq_exchange
+    rabbitmq_binding          = var.rabbitmq_binding
+    rabbitmq_queue            = var.rabbitmq_queue
+    rabbitmq_queue_resposta   = var.rabbitmq_queue_resposta
+    rabbitmq_routing_resposta = var.rabbitmq_routing_resposta
+    processar_carteirinhas_image = var.processar_carteirinhas_image
   })
 }
 
