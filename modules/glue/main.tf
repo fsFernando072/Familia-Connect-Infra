@@ -27,14 +27,18 @@ resource "aws_glue_job" "bronze_para_silver" {
     script_location = "s3://${var.silver_bucket}/${aws_s3_object.script.key}"
   }
 
-  default_arguments = {
-    "--job-language"                     = "python"
-    "--BRONZE_BUCKET"                    = var.bronze_bucket
-    "--SILVER_BUCKET"                    = var.silver_bucket
-    "--TempDir"                          = "s3://${var.silver_bucket}/glue-temp/"
-    "--enable-metrics"                   = "true"
-    "--enable-continuous-cloudwatch-log" = "true"
-  }
+  default_arguments = merge(
+    {
+      "--job-language"                     = "python"
+      "--BRONZE_BUCKET"                    = var.bronze_bucket
+      "--SILVER_BUCKET"                    = var.silver_bucket
+      "--TempDir"                          = "s3://${var.silver_bucket}/glue-temp/"
+      "--enable-metrics"                   = "true"
+      "--enable-continuous-cloudwatch-log" = "true"
+    },
+    # nome do crawler: o proprio script inicia o crawler ao terminar
+    var.enable_crawler ? { "--CRAWLER_NAME" = var.crawler_name } : {}
+  )
 
   tags = {
     Name  = var.job_name
@@ -101,6 +105,9 @@ resource "aws_glue_trigger" "crawler_apos_job" {
   count = var.enable_crawler ? 1 : 0
   name  = "${var.crawler_name}-apos-job"
   type  = "CONDITIONAL"
+
+  enabled           = true
+  start_on_creation = true
 
   predicate {
     conditions {

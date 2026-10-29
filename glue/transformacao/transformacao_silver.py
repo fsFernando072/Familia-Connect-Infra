@@ -24,7 +24,9 @@ from pyspark.sql import Window
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType
 
-args = getResolvedOptions(sys.argv, ["JOB_NAME", "BRONZE_BUCKET", "SILVER_BUCKET"])
+OPCIONAIS = ["CRAWLER_NAME"] if "--CRAWLER_NAME" in sys.argv else []
+args = getResolvedOptions(sys.argv, ["JOB_NAME", "BRONZE_BUCKET", "SILVER_BUCKET"] + OPCIONAIS)
+CRAWLER_NAME = args.get("CRAWLER_NAME")
 BRONZE = args["BRONZE_BUCKET"]
 SILVER = args["SILVER_BUCKET"]
 
@@ -82,6 +84,8 @@ def processar_cadunico():
         .withColumn("arquivo", F.input_file_name())
     )
 
+    print(f"[cadunico] colunas lidas do CSV: {df.columns}")
+
     # colunas ausentes em algum ano entram como NULL
     esperadas = [
         "codigo_ibge", "anomes_s",
@@ -121,6 +125,9 @@ def processar_cadunico():
         "arquivo",
     )
 
+    print(f"[cadunico] linhas antes do filtro: {df.count()}")
+    df.show(5, truncate=False)
+
     # descarta registros invalidos
     df = df.filter(
         (F.col("codigo_ibge") != "")
@@ -145,6 +152,11 @@ def processar_cadunico():
     )
 
     total = df.count()
+    if total == 0:
+        raise RuntimeError(
+            "[cadunico] 0 linhas apos o tratamento: nada foi gravado. "
+            "Veja 'colunas lidas do CSV' e a amostra acima (separador/nomes de coluna/formato de anomes_s)."
+        )
     (
         df.repartition("ano")
         .write.mode("overwrite")
@@ -238,6 +250,8 @@ def processar_bolsa_sp():
     )
 
     total = df.count()
+    if total == 0:
+        raise RuntimeError("[bolsa-sp] 0 linhas apos o tratamento: nada foi gravado.")
     (
         df.repartition("ano")
         .write.mode("overwrite")
@@ -260,7 +274,51 @@ def limpar_marcadores_folder():
     print(f"[limpeza] {len(chaves)} marcadores _$folder$ removidos de s3://{SILVER}/")
 
 
-processar_cadunico()
-processar_bolsa_sp()
+def tem_csv_no_bronze(prefixo):
+    """True se existir ao menos um .csv sob s3://BRONZE/prefixo (evita ler 'pasta' inexistente)."""
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=BRONZE, Prefix=prefixo):
+        if any(o["Key"].lower().endswith(".csv") for o in page.get("Contents", [])):
+            return True
+    return False
+
+
+resumo = {}
+
+if tem_csv_no_bronze("familias-cadastro-unico/"):
+    processar_cadunico()
+    resumo["cadunico"] = "processado"
+else:
+    print("[cadunico] AVISO: nenhum CSV em bronze/familias-cadastro-unico/ - base pulada")
+    resumo["cadunico"] = "pulado (sem arquivos no bronze)"
+
+if tem_csv_no_bronze("bolsa-familia-sp/"):
+    processar_bolsa_sp()
+    resumo["bolsa-familia-sp"] = "processado"
+else:
+    print("[bolsa-sp] AVISO: nenhum CSV em bronze/bolsa-familia-sp/ - base pulada")
+    resumo["bolsa-familia-sp"] = "pulado (sem arquivos no bronze)"
+
 limpar_marcadores_folder()
+print(f"[resumo] {resumo}")
+
+if all(v.startswith("pulado") for v in resumo.values()):
+    raise RuntimeError("Nenhuma base tinha arquivos no bronze: nada foi processado.")
+
+
+def iniciar_crawler():
+    """Cataloga o silver no Data Catalog. Nao derruba o job se falhar."""
+    if not CRAWLER_NAME:
+        return
+    cliente = boto3.client("glue")
+    try:
+        cliente.start_crawler(Name=CRAWLER_NAME)
+        print(f"[crawler] {CRAWLER_NAME} iniciado")
+    except cliente.exceptions.CrawlerRunningException:
+        print(f"[crawler] {CRAWLER_NAME} ja esta em execucao")
+    except Exception as e:
+        print(f"[crawler] AVISO: nao foi possivel iniciar {CRAWLER_NAME}: {e}")
+
+
+iniciar_crawler()
+
 job.commit()
