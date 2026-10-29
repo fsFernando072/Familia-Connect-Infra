@@ -358,3 +358,14 @@ Módulo `modules/transformacao` + `transformacao.tf`. Cria o banco Glue `familia
 | Gold | `gold_bolsa_familia_distrito`, `gold_familias_sp_anual` | Variação anual por distrito e visão anual de SP juntando as duas bases (bucket gold) |
 
 Ordem: `terraform apply` → invocar a ingestão → invocar a transformação (ou `transformacao_executar_no_apply = true`).
+## 🔎 Consulta ao silver (Athena)
+
+Módulo `modules/athena` + `athena.tf`. Cria o workgroup `familia-connect-silver` (engine v3, limite de 10 GB lidos por consulta) que consulta o banco `familia_connect_silver` do Data Catalog, populado pelo crawler do Glue após o job bronze → silver.
+
+| Item | Valor |
+|---|---|
+| Tabelas | `cadunico` e `bolsa_familia_sp` (particionadas por `ano`) |
+| Resultado das consultas | `s3://<silver>/athena-results/` |
+| Exports diretos (UNLOAD / CTAS) | `s3://<silver>/export/` |
+
+Uso: `terraform apply` → rodar o job do Glue (o crawler dispara sozinho ao final) → no console do Athena selecionar o workgroup `familia-connect-silver` e o banco `familia_connect_silver`. O módulo só configura o workgroup: não cria consultas salvas nem grava objetos no bucket; as pastas `athena-results/` e `export/` aparecem quando a primeira consulta ou export gravar nelas. O destino de um `UNLOAD` precisa estar vazio: use uma subpasta nova de `export/` a cada execução.
