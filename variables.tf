@@ -168,7 +168,6 @@ variable "rabbitmq_username" {
 
 variable "rabbitmq_password" {
   type        = string
-  default     = "familia@123"
   description = "Senha padrão do RabbitMQ (RABBITMQ_DEFAULT_PASS) e do Spring (SPRING_RABBITMQ_PASSWORD)"
   sensitive   = true
 }

@@ -13,7 +13,6 @@ until curl -4 -s --connect-timeout 5 https://us-east-1.ec2.archive.ubuntu.com > 
 done
 
 echo "Instalando Docker e AWS CLI..."
-configure_docker_logging
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y || true
 apt-get install -y ca-certificates curl gnupg lsb-release unzip || true
